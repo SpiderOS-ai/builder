@@ -471,7 +471,7 @@ async def get_conversation_skills(
     - Global skills (OpenHands/skills/)
     - User skills (~/.agents/skills/)
     - Organization skills (org/.agents repository)
-    - Repository skills (repo/.agents/skills/ or .openhands/microagents/, plus legacy .openhands/skills/)
+    - Repository skills (repo .agents/skills/, .openhands/microagents/, and legacy .openhands/skills/)
 
     Returns:
         JSONResponse: A JSON response containing the list of skills.

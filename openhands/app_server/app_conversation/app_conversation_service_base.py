@@ -71,7 +71,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
         - Public skills (from OpenHands/skills GitHub repo)
         - User skills (from ~/.agents/skills/)
         - Organization skills (from {org}/.agents repo)
-        - Project/repo skills (from workspace .agents/skills/, plus .openhands/microagents/ and legacy .openhands/skills/)
+        - Project/repo skills (from repo .agents/skills/, .openhands/microagents/, and legacy .openhands/skills/)
         - Sandbox skills (from exposed URLs)
 
         Args:
