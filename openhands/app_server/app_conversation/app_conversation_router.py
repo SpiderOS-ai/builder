@@ -469,9 +469,9 @@ async def get_conversation_skills(
     Skills are loaded from multiple sources:
     - Sandbox skills (exposed URLs)
     - Global skills (OpenHands/skills/)
-    - User skills (~/.openhands/skills/)
-    - Organization skills (org/.openhands repository)
-    - Repository skills (repo/.openhands/skills/ or .openhands/microagents/)
+    - User skills (~/.agents/skills/)
+    - Organization skills (org/.agents repository)
+    - Repository skills (repo/.agents/skills/ or .openhands/microagents/, plus legacy .openhands/skills/)
 
     Returns:
         JSONResponse: A JSON response containing the list of skills.
