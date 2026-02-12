@@ -306,9 +306,6 @@ async def upload_files(
     Use the sandbox's exposed agent server URL to access file operations.
     """
     conversation_id = metadata.conversation_id
-    uploaded_files = []
-    skipped_files = []
-    runtime: Runtime = conversation.runtime
 
     # Read all file contents
     file_data: list[tuple[str, bytes]] = []
