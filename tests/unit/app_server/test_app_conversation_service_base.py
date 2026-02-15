@@ -1171,3 +1171,72 @@ class TestLoadAndMergeAllSkills:
 
             # Assert
             assert skills == []
+
+
+class TestLoadAndMergeAllHooks:
+    @pytest.mark.asyncio
+    @patch(
+        'openhands.app_server.app_conversation.app_conversation_service_base.load_project_hooks_from_agent_server'
+    )
+    async def test_loads_hooks_successfully(self, mock_load_hooks):
+        mock_user_context = Mock(spec=UserContext)
+        with patch.object(AppConversationServiceBase, '__abstractmethods__', set()):
+            service = AppConversationServiceBase(
+                init_git_in_empty_workspace=True, user_context=mock_user_context
+            )
+
+            sandbox = Mock(spec=SandboxInfo)
+            sandbox.session_api_key = 'test-api-key'
+
+            mock_hook_config = Mock()
+            mock_load_hooks.return_value = mock_hook_config
+
+            hook_config = await service.load_and_merge_all_hooks(
+                sandbox, 'owner/repo', '/workspace', 'http://localhost:8000'
+            )
+
+            assert hook_config is mock_hook_config
+            mock_load_hooks.assert_called_once()
+            call_kwargs = mock_load_hooks.call_args[1]
+            assert call_kwargs['agent_server_url'] == 'http://localhost:8000'
+            assert call_kwargs['session_api_key'] == 'test-api-key'
+            assert call_kwargs['project_dir'] == '/workspace/repo'
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_agent_server_url(self):
+        mock_user_context = Mock(spec=UserContext)
+        with patch.object(AppConversationServiceBase, '__abstractmethods__', set()):
+            service = AppConversationServiceBase(
+                init_git_in_empty_workspace=True, user_context=mock_user_context
+            )
+
+            sandbox = Mock(spec=SandboxInfo)
+            sandbox.session_api_key = 'test-api-key'
+
+            hook_config = await service.load_and_merge_all_hooks(
+                sandbox, 'owner/repo', '/workspace', ''
+            )
+            assert hook_config is None
+
+    @pytest.mark.asyncio
+    @patch(
+        'openhands.app_server.app_conversation.app_conversation_service_base.load_project_hooks_from_agent_server'
+    )
+    async def test_uses_working_dir_when_no_repository(self, mock_load_hooks):
+        mock_user_context = Mock(spec=UserContext)
+        with patch.object(AppConversationServiceBase, '__abstractmethods__', set()):
+            service = AppConversationServiceBase(
+                init_git_in_empty_workspace=True, user_context=mock_user_context
+            )
+
+            sandbox = Mock(spec=SandboxInfo)
+            sandbox.session_api_key = 'test-api-key'
+
+            mock_load_hooks.return_value = None
+
+            await service.load_and_merge_all_hooks(
+                sandbox, None, '/workspace', 'http://localhost:8000'
+            )
+
+            call_kwargs = mock_load_hooks.call_args[1]
+            assert call_kwargs['project_dir'] == '/workspace'

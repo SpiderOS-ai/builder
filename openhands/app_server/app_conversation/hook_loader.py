@@ -50,7 +50,12 @@ async def load_project_hooks_from_agent_server(
         project_dir: Workspace directory path for project hooks
 
     Returns:
-        HookConfig if present and valid, else None. Returns None on error.
+        HookConfig if present and valid, else None.
+
+        Returns None when:
+        - project_dir is not provided
+        - hooks.json is missing/empty
+        - the agent-server returns an error or is unreachable
     """
     if not project_dir:
         return None
