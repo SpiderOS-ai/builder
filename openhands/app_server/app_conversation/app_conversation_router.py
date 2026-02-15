@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, AsyncGenerator, Literal
 from uuid import UUID
@@ -33,6 +34,9 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from openhands.app_server.app_conversation.app_conversation_info_models import (
+    AppConversationInfo,
+)
 from openhands.app_server.app_conversation.app_conversation_models import (
     AppConversation,
     AppConversationPage,
@@ -68,9 +72,11 @@ from openhands.app_server.config import (
 )
 from openhands.app_server.sandbox.sandbox_models import (
     AGENT_SERVER,
+    SandboxInfo,
     SandboxStatus,
 )
 from openhands.app_server.sandbox.sandbox_service import SandboxService
+from openhands.app_server.sandbox.sandbox_spec_models import SandboxSpecInfo
 from openhands.app_server.sandbox.sandbox_spec_service import SandboxSpecService
 from openhands.app_server.utils.docker_utils import (
     replace_localhost_hostname_for_docker,
@@ -89,15 +95,6 @@ db_session_dependency = depends_db_session()
 httpx_client_dependency = depends_httpx_client()
 sandbox_service_dependency = depends_sandbox_service()
 sandbox_spec_service_dependency = depends_sandbox_spec_service()
-
-
-# Helper types and functions
-from dataclasses import dataclass
-from openhands.app_server.app_conversation.app_conversation_info_models import (
-    AppConversationInfo,
-)
-from openhands.app_server.sandbox.sandbox_models import SandboxInfo
-from openhands.app_server.sandbox.sandbox_spec_models import SandboxSpecInfo
 
 
 @dataclass
