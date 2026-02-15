@@ -75,13 +75,19 @@ async def load_hooks_from_agent_server(
 
     except httpx.HTTPStatusError as e:
         _logger.warning(
-            f'Agent-server returned error status {e.response.status_code}: '
-            f'{e.response.text}'
+            f'Agent-server at {agent_server_url} returned error status {e.response.status_code} '
+            f'when loading hooks from {project_dir}: {e.response.text}'
         )
         return None
     except httpx.RequestError as e:
-        _logger.warning(f'Failed to connect to agent-server: {e}')
+        _logger.warning(
+            f'Failed to connect to agent-server at {agent_server_url} '
+            f'when loading hooks from {project_dir}: {e}'
+        )
         return None
     except Exception as e:
-        _logger.warning(f'Failed to load hooks from agent-server: {e}')
+        _logger.warning(
+            f'Failed to load hooks from agent-server at {agent_server_url} '
+            f'for project {project_dir}: {e}'
+        )
         return None

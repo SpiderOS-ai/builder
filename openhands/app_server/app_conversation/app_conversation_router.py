@@ -90,6 +90,104 @@ httpx_client_dependency = depends_httpx_client()
 sandbox_service_dependency = depends_sandbox_service()
 sandbox_spec_service_dependency = depends_sandbox_spec_service()
 
+
+# Helper types and functions
+from dataclasses import dataclass
+from openhands.app_server.app_conversation.app_conversation_info_models import (
+    AppConversationInfo,
+)
+from openhands.app_server.sandbox.sandbox_models import SandboxInfo
+from openhands.app_server.sandbox.sandbox_spec_models import SandboxSpecInfo
+
+
+@dataclass
+class AgentServerContext:
+    """Context for accessing the agent server for a conversation."""
+
+    conversation: AppConversationInfo
+    sandbox: SandboxInfo
+    sandbox_spec: SandboxSpecInfo
+    agent_server_url: str
+    session_api_key: str | None
+
+
+async def _get_agent_server_context(
+    conversation_id: UUID,
+    app_conversation_service: AppConversationService,
+    sandbox_service: SandboxService,
+    sandbox_spec_service: SandboxSpecService,
+) -> AgentServerContext | JSONResponse:
+    """Get the agent server context for a conversation.
+
+    This helper retrieves all necessary information to communicate with the
+    agent server for a given conversation, including the sandbox info,
+    sandbox spec, and agent server URL.
+
+    Args:
+        conversation_id: The conversation ID
+        app_conversation_service: Service for conversation operations
+        sandbox_service: Service for sandbox operations
+        sandbox_spec_service: Service for sandbox spec operations
+
+    Returns:
+        AgentServerContext if successful, or JSONResponse with error details.
+    """
+    # Get the conversation info
+    conversation = await app_conversation_service.get_app_conversation(conversation_id)
+    if not conversation:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={'error': f'Conversation {conversation_id} not found'},
+        )
+
+    # Get the sandbox info
+    sandbox = await sandbox_service.get_sandbox(conversation.sandbox_id)
+    if not sandbox or sandbox.status != SandboxStatus.RUNNING:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                'error': f'Sandbox not found or not running for conversation {conversation_id}'
+            },
+        )
+
+    # Get the sandbox spec to find the working directory
+    sandbox_spec = await sandbox_spec_service.get_sandbox_spec(sandbox.sandbox_spec_id)
+    if not sandbox_spec:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={'error': 'Sandbox spec not found'},
+        )
+
+    # Get the agent server URL
+    if not sandbox.exposed_urls:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={'error': 'No agent server URL found for sandbox'},
+        )
+
+    agent_server_url = None
+    for exposed_url in sandbox.exposed_urls:
+        if exposed_url.name == AGENT_SERVER:
+            agent_server_url = exposed_url.url
+            break
+
+    if not agent_server_url:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={'error': 'Agent server URL not found in sandbox'},
+        )
+
+    agent_server_url = replace_localhost_hostname_for_docker(agent_server_url)
+
+    return AgentServerContext(
+        conversation=conversation,
+        sandbox=sandbox,
+        sandbox_spec=sandbox_spec,
+        agent_server_url=agent_server_url,
+        session_api_key=sandbox.session_api_key,
+    )
+
+
 # Read methods
 
 
@@ -481,56 +579,15 @@ async def get_conversation_skills(
         JSONResponse: A JSON response containing the list of skills.
     """
     try:
-        # Get the conversation info
-        conversation = await app_conversation_service.get_app_conversation(
-            conversation_id
+        # Get agent server context (conversation, sandbox, sandbox_spec, agent_server_url)
+        ctx = await _get_agent_server_context(
+            conversation_id,
+            app_conversation_service,
+            sandbox_service,
+            sandbox_spec_service,
         )
-        if not conversation:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': f'Conversation {conversation_id} not found'},
-            )
-
-        # Get the sandbox info
-        sandbox = await sandbox_service.get_sandbox(conversation.sandbox_id)
-        if not sandbox or sandbox.status != SandboxStatus.RUNNING:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={
-                    'error': f'Sandbox not found or not running for conversation {conversation_id}'
-                },
-            )
-
-        # Get the sandbox spec to find the working directory
-        sandbox_spec = await sandbox_spec_service.get_sandbox_spec(
-            sandbox.sandbox_spec_id
-        )
-        if not sandbox_spec:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'Sandbox spec not found'},
-            )
-
-        # Get the agent server URL
-        if not sandbox.exposed_urls:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'No agent server URL found for sandbox'},
-            )
-
-        agent_server_url = None
-        for exposed_url in sandbox.exposed_urls:
-            if exposed_url.name == AGENT_SERVER:
-                agent_server_url = exposed_url.url
-                break
-
-        if not agent_server_url:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'Agent server URL not found in sandbox'},
-            )
-
-        agent_server_url = replace_localhost_hostname_for_docker(agent_server_url)
+        if isinstance(ctx, JSONResponse):
+            return ctx
 
         # Load skills from all sources
         logger.info(f'Loading skills for conversation {conversation_id}')
@@ -539,10 +596,10 @@ async def get_conversation_skills(
         all_skills: list = []
         if isinstance(app_conversation_service, AppConversationServiceBase):
             all_skills = await app_conversation_service.load_and_merge_all_skills(
-                sandbox,
-                conversation.selected_repository,
-                sandbox_spec.working_dir,
-                agent_server_url,
+                ctx.sandbox,
+                ctx.conversation.selected_repository,
+                ctx.sandbox_spec.working_dir,
+                ctx.agent_server_url,
             )
 
         logger.info(
@@ -610,69 +667,28 @@ async def get_conversation_hooks(
         JSONResponse: A JSON response containing the list of hooks.
     """
     try:
-        # Get the conversation info
-        conversation = await app_conversation_service.get_app_conversation(
-            conversation_id
+        # Get agent server context (conversation, sandbox, sandbox_spec, agent_server_url)
+        ctx = await _get_agent_server_context(
+            conversation_id,
+            app_conversation_service,
+            sandbox_service,
+            sandbox_spec_service,
         )
-        if not conversation:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': f'Conversation {conversation_id} not found'},
-            )
-
-        # Get the sandbox info
-        sandbox = await sandbox_service.get_sandbox(conversation.sandbox_id)
-        if not sandbox or sandbox.status != SandboxStatus.RUNNING:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={
-                    'error': f'Sandbox not found or not running for conversation {conversation_id}'
-                },
-            )
-
-        # Get the sandbox spec to find the working directory
-        sandbox_spec = await sandbox_spec_service.get_sandbox_spec(
-            sandbox.sandbox_spec_id
-        )
-        if not sandbox_spec:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'Sandbox spec not found'},
-            )
-
-        # Get the agent server URL
-        if not sandbox.exposed_urls:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'No agent server URL found for sandbox'},
-            )
-
-        agent_server_url = None
-        for exposed_url in sandbox.exposed_urls:
-            if exposed_url.name == AGENT_SERVER:
-                agent_server_url = exposed_url.url
-                break
-
-        if not agent_server_url:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={'error': 'Agent server URL not found in sandbox'},
-            )
-
-        agent_server_url = replace_localhost_hostname_for_docker(agent_server_url)
+        if isinstance(ctx, JSONResponse):
+            return ctx
 
         # Determine project directory for hooks
         # If a repository is selected, hooks are in {working_dir}/{repo_name}/.openhands/hooks.json
         # Otherwise, hooks are in {working_dir}/.openhands/hooks.json
-        project_dir = sandbox_spec.working_dir
-        if conversation.selected_repository:
-            repo_name = conversation.selected_repository.split('/')[-1]
-            project_dir = f'{sandbox_spec.working_dir}/{repo_name}'
+        project_dir = ctx.sandbox_spec.working_dir
+        if ctx.conversation.selected_repository:
+            repo_name = ctx.conversation.selected_repository.split('/')[-1]
+            project_dir = f'{ctx.sandbox_spec.working_dir}/{repo_name}'
 
         # Load hooks from agent-server
         logger.info(
             f'Loading hooks for conversation {conversation_id}, '
-            f'agent_server_url={agent_server_url}, '
+            f'agent_server_url={ctx.agent_server_url}, '
             f'project_dir={project_dir}'
         )
 
@@ -681,8 +697,8 @@ async def get_conversation_hooks(
         )
 
         hook_config = await load_hooks_from_agent_server(
-            agent_server_url=agent_server_url,
-            session_api_key=sandbox.session_api_key,
+            agent_server_url=ctx.agent_server_url,
+            session_api_key=ctx.session_api_key,
             project_dir=project_dir,
         )
 

@@ -1082,7 +1082,18 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             working_dir: Working directory path in the sandbox
 
         Returns:
-            HookConfig if hooks.json exists and is valid, None otherwise
+            HookConfig if hooks.json exists and is valid, None otherwise.
+            Returns None in the following cases:
+            - hooks.json file does not exist
+            - hooks.json contains invalid JSON
+            - hooks.json contains an empty hooks configuration
+            - Agent server is unreachable or returns an error
+
+        Note:
+            This method implements graceful degradation - if hooks cannot be loaded
+            for any reason, it returns None rather than raising an exception. This
+            ensures that conversation startup is not blocked by hook loading failures.
+            Errors are logged as warnings for debugging purposes.
         """
         return await load_hooks_from_agent_server(
             agent_server_url=remote_workspace.host,

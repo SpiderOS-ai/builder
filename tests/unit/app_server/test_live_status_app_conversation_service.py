@@ -112,6 +112,10 @@ class TestLiveStatusAppConversationService:
         self.mock_sandbox.id = uuid4()
         self.mock_sandbox.status = SandboxStatus.RUNNING
 
+        # Default mock for hooks loading - returns None (no hooks found)
+        # Tests that specifically test hooks loading can override this mock
+        self.service._load_hooks_from_workspace = AsyncMock(return_value=None)
+
     @pytest.mark.asyncio
     async def test_setup_secrets_for_git_providers_no_provider_tokens(self):
         """Test _setup_secrets_for_git_providers with no provider tokens."""
@@ -988,9 +992,7 @@ class TestLiveStatusAppConversationService:
             side_effect=Exception('Skills loading failed')
         )
 
-        # Mock hooks loading to return None (no hooks found)
-        # This isolates the test to focus on skills loading failure
-        self.service._load_hooks_from_workspace = AsyncMock(return_value=None)
+        # Note: hooks loading is already mocked in setup_method() to return None
 
         # Act
         with patch(

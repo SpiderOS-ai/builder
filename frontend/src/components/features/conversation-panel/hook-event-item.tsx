@@ -11,13 +11,13 @@ interface HookEventItemProps {
   onToggle: (eventType: string) => void;
 }
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  pre_tool_use: "Pre Tool Use",
-  post_tool_use: "Post Tool Use",
-  user_prompt_submit: "User Prompt Submit",
-  session_start: "Session Start",
-  session_end: "Session End",
-  stop: "Stop",
+const EVENT_TYPE_I18N_KEYS: Record<string, I18nKey> = {
+  pre_tool_use: I18nKey.HOOKS_MODAL$EVENT_PRE_TOOL_USE,
+  post_tool_use: I18nKey.HOOKS_MODAL$EVENT_POST_TOOL_USE,
+  user_prompt_submit: I18nKey.HOOKS_MODAL$EVENT_USER_PROMPT_SUBMIT,
+  session_start: I18nKey.HOOKS_MODAL$EVENT_SESSION_START,
+  session_end: I18nKey.HOOKS_MODAL$EVENT_SESSION_END,
+  stop: I18nKey.HOOKS_MODAL$EVENT_STOP,
 };
 
 export function HookEventItem({
@@ -26,8 +26,8 @@ export function HookEventItem({
   onToggle,
 }: HookEventItemProps) {
   const { t } = useTranslation();
-  const eventTypeLabel =
-    EVENT_TYPE_LABELS[hookEvent.event_type] || hookEvent.event_type;
+  const i18nKey = EVENT_TYPE_I18N_KEYS[hookEvent.event_type];
+  const eventTypeLabel = i18nKey ? t(i18nKey) : hookEvent.event_type;
 
   const totalHooks = hookEvent.matchers.reduce(
     (sum, matcher) => sum + matcher.hooks.length,
