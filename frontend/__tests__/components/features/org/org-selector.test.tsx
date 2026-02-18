@@ -14,6 +14,10 @@ vi.mock("react-router", () => ({
   useRevalidator: () => ({ revalidate: vi.fn() }),
 }));
 
+vi.mock("#/hooks/query/use-is-authed", () => ({
+  useIsAuthed: () => ({ data: true }),
+}));
+
 vi.mock("react-i18next", async () => {
   const actual =
     await vi.importActual<typeof import("react-i18next")>("react-i18next");
@@ -45,9 +49,10 @@ const renderOrgSelector = () =>
 
 describe("OrgSelector", () => {
   it("should not render when user only has a personal workspace", async () => {
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_PERSONAL_ORG,
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [MOCK_PERSONAL_ORG],
+      currentOrgId: MOCK_PERSONAL_ORG.id,
+    });
 
     const { container } = renderOrgSelector();
 
@@ -57,9 +62,10 @@ describe("OrgSelector", () => {
   });
 
   it("should render when user only has a team organization", async () => {
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_TEAM_ORG_ACME,
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [MOCK_TEAM_ORG_ACME],
+      currentOrgId: MOCK_TEAM_ORG_ACME.id,
+    });
 
     const { container } = renderOrgSelector();
 
@@ -82,10 +88,10 @@ describe("OrgSelector", () => {
   });
 
   it("should select the first organization after orgs are loaded", async () => {
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_PERSONAL_ORG,
-      MOCK_TEAM_ORG_ACME,
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [MOCK_PERSONAL_ORG, MOCK_TEAM_ORG_ACME],
+      currentOrgId: MOCK_PERSONAL_ORG.id,
+    });
 
     renderOrgSelector();
 
@@ -98,11 +104,14 @@ describe("OrgSelector", () => {
 
   it("should show all options when dropdown is opened", async () => {
     const user = userEvent.setup();
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_PERSONAL_ORG,
-      MOCK_TEAM_ORG_ACME,
-      createMockOrganization("3", "Test Organization", 500),
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [
+        MOCK_PERSONAL_ORG,
+        MOCK_TEAM_ORG_ACME,
+        createMockOrganization("3", "Test Organization", 500),
+      ],
+      currentOrgId: MOCK_PERSONAL_ORG.id,
+    });
 
     renderOrgSelector();
 
@@ -129,10 +138,10 @@ describe("OrgSelector", () => {
   it("should call switchOrganization API when selecting a different organization", async () => {
     // Arrange
     const user = userEvent.setup();
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_PERSONAL_ORG,
-      MOCK_TEAM_ORG_ACME,
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [MOCK_PERSONAL_ORG, MOCK_TEAM_ORG_ACME],
+      currentOrgId: MOCK_PERSONAL_ORG.id,
+    });
     const switchOrgSpy = vi
       .spyOn(organizationService, "switchOrganization")
       .mockResolvedValue(MOCK_TEAM_ORG_ACME);
@@ -157,10 +166,10 @@ describe("OrgSelector", () => {
   it("should show loading state while switching organizations", async () => {
     // Arrange
     const user = userEvent.setup();
-    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue([
-      MOCK_PERSONAL_ORG,
-      MOCK_TEAM_ORG_ACME,
-    ]);
+    vi.spyOn(organizationService, "getOrganizations").mockResolvedValue({
+      items: [MOCK_PERSONAL_ORG, MOCK_TEAM_ORG_ACME],
+      currentOrgId: MOCK_PERSONAL_ORG.id,
+    });
     vi.spyOn(organizationService, "switchOrganization").mockImplementation(
       () => new Promise(() => {}), // never resolves to keep loading state
     );

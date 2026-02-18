@@ -10,8 +10,9 @@ import { Dropdown } from "#/ui/dropdown/dropdown";
 
 export function OrgSelector() {
   const { t } = useTranslation();
-  const { organizationId, setOrganizationId } = useSelectedOrganizationId();
-  const { data: organizations, isLoading } = useOrganizations();
+  const { organizationId } = useSelectedOrganizationId();
+  const { data, isLoading } = useOrganizations();
+  const organizations = data?.organizations;
   const { mutate: switchOrganization, isPending: isSwitching } =
     useSwitchOrganization();
   const shouldHideSelector = useShouldHideOrgSelector();
@@ -21,13 +22,6 @@ export function OrgSelector() {
       org.is_personal ? t(I18nKey.ORG$PERSONAL_WORKSPACE) : org.name,
     [t],
   );
-
-  // Auto-select the first organization when data loads and no org is selected
-  React.useEffect(() => {
-    if (!organizationId && organizations && organizations.length > 0) {
-      setOrganizationId(organizations[0].id);
-    }
-  }, [organizationId, organizations, setOrganizationId]);
 
   const selectedOrg = React.useMemo(() => {
     if (organizationId) {
