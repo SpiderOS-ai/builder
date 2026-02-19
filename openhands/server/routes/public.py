@@ -19,7 +19,7 @@ from openhands.utils.llm import get_supported_llm_models
 app = APIRouter(prefix='/api/options', dependencies=get_dependencies())
 
 
-@app.get('/models', response_model=list[str])
+@app.get('/models', response_model=list[str], deprecated=True)
 async def get_litellm_models() -> list[str]:
     """Get all models supported by LiteLLM.
 
@@ -37,7 +37,7 @@ async def get_litellm_models() -> list[str]:
     return get_supported_llm_models(config)
 
 
-@app.get('/agents', response_model=list[str])
+@app.get('/agents', response_model=list[str], deprecated=True)
 async def get_agents() -> list[str]:
     """Get all agents supported by LiteLLM.
 
