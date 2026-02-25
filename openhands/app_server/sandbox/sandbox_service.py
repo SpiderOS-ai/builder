@@ -148,7 +148,7 @@ class SandboxService(ABC):
             _logger.info(f'agent server response: {response}')
             return response.is_success
         except Exception as exc:
-            _logger.debug(
+            _logger.info(
                 f'Agent server health check failed for sandbox {sandbox.id}'
                 f'{f" at {url}" if url else ""}: {exc}'
             )
