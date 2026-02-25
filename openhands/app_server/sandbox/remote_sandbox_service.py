@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -336,9 +337,9 @@ class RemoteSandboxService(SandboxService):
 
     async def get_sandbox(self, sandbox_id: str) -> Union[SandboxInfo, None]:
         """Get a single sandbox by checking its corresponding runtime."""
-        _logger.info(f'Getting sandbox with id: {sandbox_id}')
+        _logger.info(f'Getting sandbox with id: {sandbox_id}', stack_info=True)
         stored_sandbox = await self._get_stored_sandbox(sandbox_id)
-        _logger.info(f'Got sandbox: {stored_sandbox}')
+        _logger.info(f'Got sandbox: {json.dumps(stored_sandbox.__dict__, default=str)}')
         if stored_sandbox is None:
             return None
 
