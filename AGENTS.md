@@ -30,6 +30,12 @@ then re-run the command to ensure it passes. Common issues include:
 - Trailing whitespace
 - Missing newlines at end of files
 
+
+## MCP tool conversation context (SaaS)
+
+- `openhands/server/routes/mcp.py` appends an OpenHands conversation link to PR/MR bodies (e.g. for `create_pr`) when the incoming MCP request includes the `X-OpenHands-ServerConversation-ID` header.
+- Ensure MCP clients/tools are initialized with a `conversation_id` (e.g. `add_mcp_tools_to_agent(..., conversation_id=sid)`) so that header is set; otherwise PR/MR descriptions will be missing the conversation link.
+
 ## Git Best Practices
 
 - Prefer specific `git add <filename>` instead of `git add .` to avoid accidentally staging unintended files
