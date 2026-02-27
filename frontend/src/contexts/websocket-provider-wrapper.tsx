@@ -37,7 +37,8 @@ export function WebSocketProviderWrapper({
   version,
 }: WebSocketProviderWrapperProps) {
   // Get conversation data for V1 provider
-  const { data: conversation } = useActiveConversation();
+  const { data: conversation, refetch: refetchConversation } =
+    useActiveConversation();
   // Get sub-conversation data for V1 provider
   const { data: subConversations } = useSubConversations(
     conversation?.sub_conversation_ids ?? [],
@@ -53,6 +54,7 @@ export function WebSocketProviderWrapper({
   useSandboxRecovery({
     conversationId,
     conversationStatus: conversation?.status,
+    refetchConversation,
   });
 
   if (version === 0) {

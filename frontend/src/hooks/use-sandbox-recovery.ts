@@ -6,10 +6,15 @@ import { useVisibilityChange } from "./use-visibility-change";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { I18nKey } from "#/i18n/declaration";
 import type { ConversationStatus } from "#/types/conversation-status";
+import type { Conversation } from "#/api/open-hands.types";
 
 interface UseSandboxRecoveryOptions {
   conversationId: string | undefined;
   conversationStatus: ConversationStatus | undefined;
+  /** Function to refetch the conversation data - used to get fresh status on tab focus */
+  refetchConversation?: () => Promise<{
+    data: Conversation | null | undefined;
+  }>;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
@@ -36,6 +41,7 @@ interface UseSandboxRecoveryOptions {
 export function useSandboxRecovery({
   conversationId,
   conversationStatus,
+  refetchConversation,
   onSuccess,
   onError,
 }: UseSandboxRecoveryOptions) {
@@ -48,44 +54,48 @@ export function useSandboxRecovery({
   const hasAttemptedRecoveryRef = React.useRef<string | null>(null);
   const isInitialLoadRef = React.useRef(true);
 
-  const attemptRecovery = React.useCallback(() => {
-    /**
-     * Only recover if the sandbox is paused (conversation.status === stopped) and not already resuming.
-     *
-     * Note: ConversationStatus uses different terminology than SandboxStatus:
-     *   - SandboxStatus.PAUSED  → ConversationStatus.STOPPED : the runtime is not running but may be restarted
-     *   - SandboxStatus.MISSING → ConversationStatus.ARCHIVED : the runtime is not running and will not restart due to deleted files.
-     */
-    if (!conversationId || conversationStatus !== "STOPPED" || isResuming) {
-      return;
-    }
+  const attemptRecovery = React.useCallback(
+    (statusOverride?: ConversationStatus) => {
+      const status = statusOverride ?? conversationStatus;
+      /**
+       * Only recover if sandbox is paused (status === STOPPED) and not already resuming
+       *
+       * Note: ConversationStatus uses different terminology than SandboxStatus:
+       *   - SandboxStatus.PAUSED  → ConversationStatus.STOPPED : the runtime is not running but may be restarted
+       *   - SandboxStatus.MISSING → ConversationStatus.ARCHIVED : the runtime is not running and will not restart due to deleted files.
+       */
+      if (!conversationId || status !== "STOPPED" || isResuming) {
+        return;
+      }
 
-    resumeSandbox(
-      { conversationId, providers },
-      {
-        onSuccess: () => {
-          onSuccess?.();
+      resumeSandbox(
+        { conversationId, providers },
+        {
+          onSuccess: () => {
+            onSuccess?.();
+          },
+          onError: (error) => {
+            displayErrorToast(
+              t(I18nKey.CONVERSATION$FAILED_TO_START_WITH_ERROR, {
+                error: error.message,
+              }),
+            );
+            onError?.(error);
+          },
         },
-        onError: (error) => {
-          displayErrorToast(
-            t(I18nKey.CONVERSATION$FAILED_TO_START_WITH_ERROR, {
-              error: error.message,
-            }),
-          );
-          onError?.(error);
-        },
-      },
-    );
-  }, [
-    conversationId,
-    conversationStatus,
-    isResuming,
-    providers,
-    resumeSandbox,
-    onSuccess,
-    onError,
-    t,
-  ]);
+      );
+    },
+    [
+      conversationId,
+      conversationStatus,
+      isResuming,
+      providers,
+      resumeSandbox,
+      onSuccess,
+      onError,
+      t,
+    ],
+  );
 
   // Handle page refresh (initial load) and conversation navigation
   React.useEffect(() => {
@@ -110,13 +120,15 @@ export function useSandboxRecovery({
     }
   }, [conversationId, conversationStatus, attemptRecovery]);
 
-  // Handle tab focus (visibility change) - resume when user returns to tab
+  // Handle tab focus (visibility change) - refetch conversation status and resume if needed
   useVisibilityChange({
     conversationId: !!conversationId,
-    onVisible: () => {
-      if (conversationStatus === "STOPPED") {
-        attemptRecovery();
-      }
+    onVisible: async () => {
+      if (!conversationId || !refetchConversation) return;
+
+      // Refetch to get fresh status - cached status may be stale if sandbox was paused while tab was inactive
+      const { data } = await refetchConversation();
+      attemptRecovery(data?.status);
     },
   });
 
