@@ -271,8 +271,7 @@ async def keycloak_callback(
             # Fail open - continue with login if reCAPTCHA service unavailable
 
     # Check if email domain is blocked
-    logger.info('trace_before_domain_blocker')
-    if email and domain_blocker.is_domain_blocked(email):
+    if email and await domain_blocker.is_domain_blocked(email):
         logger.warning(
             f'Blocked authentication attempt for email: {email}, user_id: {user_id}'
         )
