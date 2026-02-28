@@ -178,7 +178,7 @@ class RemoteSandboxService(SandboxService):
                 url = runtime.get('url', None)
                 if url:
                     _logger.info(f'Building exposed urls for runtime url: {url}')
-                    runtime_id = stored.id
+                    runtime_id = runtime['runtime_id']
                     _logger.info(f'Runtime ID for URL building: {runtime_id}')
                     exposed_urls.append(
                         ExposedUrl(name=AGENT_SERVER, url=url, port=AGENT_SERVER_PORT)
