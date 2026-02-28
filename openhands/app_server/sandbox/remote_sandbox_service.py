@@ -169,12 +169,17 @@ class RemoteSandboxService(SandboxService):
 
         # Get session_api_key and exposed urls
         if runtime:
+            _logger.info(
+                f'Getting session_api_key and exposed urls for runtime: {runtime}'
+            )
             session_api_key = runtime['session_api_key']
             if status == SandboxStatus.RUNNING:
                 exposed_urls = []
                 url = runtime.get('url', None)
                 if url:
+                    _logger.info(f'Building exposed urls for runtime url: {url}')
                     runtime_id = stored.id
+                    _logger.info(f'Runtime ID for URL building: {runtime_id}')
                     exposed_urls.append(
                         ExposedUrl(name=AGENT_SERVER, url=url, port=AGENT_SERVER_PORT)
                     )
@@ -205,6 +210,7 @@ class RemoteSandboxService(SandboxService):
             session_api_key = None
             exposed_urls = None
 
+        _logger.info(f'exposed_urls: {exposed_urls}')
         sandbox_spec_id = stored.sandbox_spec_id
         return SandboxInfo(
             id=stored.id,
