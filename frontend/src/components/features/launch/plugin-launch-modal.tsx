@@ -142,7 +142,7 @@ export function PluginLaunchModal({
     if (typeof paramValue === "number") {
       return (
         <div key={paramKey} className="flex flex-col gap-1 py-2">
-          <label htmlFor={inputId} className="text-sm text-tertiary">
+          <label htmlFor={inputId} className="text-sm text-white">
             {paramKey}
           </label>
           <input
@@ -166,7 +166,7 @@ export function PluginLaunchModal({
     // Default: string input
     return (
       <div key={paramKey} className="flex flex-col gap-1 py-2">
-        <label htmlFor={inputId} className="text-sm text-tertiary">
+        <label htmlFor={inputId} className="text-sm text-white">
           {paramKey}
         </label>
         <input
@@ -207,21 +207,21 @@ export function PluginLaunchModal({
             {getPluginDisplayName(plugin)}
           </Typography.Text>
           {isExpanded ? (
-            <IoChevronDown className="h-5 w-5 text-tertiary" />
+            <IoChevronDown className="h-5 w-5 text-white" />
           ) : (
-            <IoChevronForward className="h-5 w-5 text-tertiary" />
+            <IoChevronForward className="h-5 w-5 text-white" />
           )}
         </button>
 
         {isExpanded && (
           <div className="border-t border-tertiary px-4 py-3">
             {plugin.ref && (
-              <div className="mb-2 text-xs text-tertiary">
+              <div className="mb-2 text-xs text-white">
                 {t(I18nKey.LAUNCH$PLUGIN_REF)} {plugin.ref}
               </div>
             )}
             {plugin.repo_path && (
-              <div className="mb-2 text-xs text-tertiary">
+              <div className="mb-2 text-xs text-white">
                 {t(I18nKey.LAUNCH$PLUGIN_PATH)} {plugin.repo_path}
               </div>
             )}
@@ -254,7 +254,7 @@ export function PluginLaunchModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-tertiary hover:text-secondary hover:bg-tertiary"
+            className="rounded-md p-1 text-white hover:text-secondary hover:bg-tertiary"
             aria-label="Close"
             data-testid="close-button"
           >
@@ -262,7 +262,7 @@ export function PluginLaunchModal({
           </button>
         </div>
 
-        {message && <p className="text-sm text-tertiary">{message}</p>}
+        {message && <p className="text-sm text-white">{message}</p>}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {pluginsWithParams.length > 0 && (
@@ -275,7 +275,7 @@ export function PluginLaunchModal({
 
           {pluginsWithoutParams.length > 0 && (
             <div className={cn(pluginsWithParams.length > 0 && "mt-4")}>
-              <Typography.H3 className="mb-2 text-tertiary">
+              <Typography.H3 className="mb-2 text-white">
                 {pluginsWithParams.length > 0
                   ? t(I18nKey.LAUNCH$ADDITIONAL_PLUGINS)
                   : t(I18nKey.LAUNCH$PLUGINS)}
@@ -289,7 +289,7 @@ export function PluginLaunchModal({
                     <div className="font-medium">
                       {getPluginDisplayName(plugin)}
                     </div>
-                    <div className="text-xs text-tertiary mt-1">
+                    <div className="text-xs text-white mt-1">
                       {getPluginSourceInfo(plugin)}
                       {plugin.repo_path && (
                         <span className="ml-1">/ {plugin.repo_path}</span>
