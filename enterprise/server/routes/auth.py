@@ -7,7 +7,6 @@ from typing import Annotated, Literal, Optional
 from urllib.parse import quote
 from uuid import UUID as parse_uuid
 
-import posthog
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import SecretStr
@@ -38,6 +37,7 @@ from storage.database import session_maker
 from storage.user import User
 from storage.user_store import UserStore
 
+from openhands.analytics import get_analytics_service
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderHandler
 from openhands.integrations.service_types import ProviderType, TokenResponse
@@ -146,6 +146,35 @@ def _extract_recaptcha_state(state: str | None) -> tuple[str, str | None]:
     """
     redirect_url, recaptcha_token, _ = _extract_oauth_state(state)
     return redirect_url, recaptcha_token
+
+
+async def _get_user_orgs_with_data(user_id: str, org_member_ids: list) -> list:
+    """Load Org objects for a user's org memberships.
+
+    Uses org_member.org_id list to batch-load Org objects, avoiding N+1
+    by loading all orgs a user belongs to in one query via OrgStore.
+
+    Args:
+        user_id: The user's ID string
+        org_member_ids: List of org_id UUIDs from user.org_members
+
+    Returns:
+        List of Org objects the user belongs to
+    """
+    from storage.org_store import OrgStore
+
+    orgs = []
+    for org_id in org_member_ids:
+        try:
+            org = OrgStore.get_org_by_id(org_id)
+            if org:
+                orgs.append(org)
+        except Exception:
+            logger.exception(
+                'auth:_get_user_orgs_with_data:failed',
+                extra={'user_id': user_id, 'org_id': str(org_id)},
+            )
+    return orgs
 
 
 @oauth_router.get('/keycloak/callback')
@@ -368,36 +397,79 @@ async def keycloak_callback(
         f'keycloakAccessToken: {keycloak_access_token}, keycloakUserId: {user_id}'
     )
 
-    # adding in posthog tracking
+    # Server-side identity — full person and org group tracking via AnalyticsService
+    analytics = get_analytics_service()
+    if analytics:
+        consented = user.user_consents_to_analytics is True  # None = undecided = not consented
 
-    # If this is a feature environment, add "FEATURE_" prefix to user_id for PostHog
-    posthog_user_id = f'FEATURE_{user_id}' if IS_FEATURE_ENV else user_id
+        # Load current org for person properties
+        from storage.org_store import OrgStore
 
-    try:
-        posthog.set(
-            distinct_id=posthog_user_id,
+        current_org = (
+            OrgStore.get_org_by_id(user.current_org_id) if user.current_org_id else None
+        )
+
+        # Set person properties (SaaS only, consent-gated inside service)
+        analytics.set_person_properties(
+            distinct_id=user_id,
             properties={
-                'user_id': posthog_user_id,
-                'original_user_id': user_id,
-                'is_feature_env': IS_FEATURE_ENV,
+                'email': email,
+                'org_id': str(user.current_org_id) if user.current_org_id else None,
+                'org_name': current_org.name if current_org else None,
+                'plan_tier': None,  # plan_tier not yet on Org model — deferred to future phase
+                'created_at': str(user.accepted_tos) if hasattr(user, 'accepted_tos') and user.accepted_tos else None,
+                'idp': idp,
+                'last_login_at': datetime.now(timezone.utc).isoformat(),
             },
+            consented=consented,
         )
-    except Exception as e:
-        logger.error(
-            'auth:posthog_set:failed',
-            extra={
-                'user_id': user_id,
-                'error': str(e),
-            },
+
+        # Group identify for all orgs the user belongs to
+        # user.org_members is eagerly loaded via joinedload in UserStore.get_user_by_id_async
+        org_member_ids = [om.org_id for om in user.org_members] if user.org_members else []
+        user_orgs = await _get_user_orgs_with_data(user_id, org_member_ids)
+
+        from storage.org_member_store import OrgMemberStore
+
+        for org in user_orgs:
+            try:
+                member_count = await OrgMemberStore.get_org_members_count(org_id=org.id)
+            except Exception:
+                logger.exception(
+                    'auth:group_identify:member_count_failed',
+                    extra={'user_id': user_id, 'org_id': str(org.id)},
+                )
+                member_count = None
+
+            analytics.group_identify(
+                group_type='org',
+                group_key=str(org.id),
+                properties={
+                    'org_name': org.name,
+                    'plan_tier': None,  # plan_tier not yet on Org model — deferred to future phase
+                    'created_at': None,  # created_at not yet on Org model — deferred to future phase
+                    'member_count': member_count,
+                    # credit_balance: deferred to Phase 2 (requires billing infrastructure)
+                },
+                distinct_id=user_id,
+                consented=consented,
+            )
+
+        # Capture login event
+        analytics.capture(
+            distinct_id=user_id,
+            event='user logged in',
+            properties={'idp': idp},
+            org_id=str(user.current_org_id) if user.current_org_id else None,
+            consented=consented,
         )
-        # Continue execution as this is not critical
 
     logger.info(
         'user_logged_in',
         extra={
             'idp': idp,
             'idp_type': idp_type,
-            'posthog_user_id': posthog_user_id,
+            'user_id': user_id,
             'is_feature_env': IS_FEATURE_ENV,
         },
     )
