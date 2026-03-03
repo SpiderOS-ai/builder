@@ -48,9 +48,7 @@ def get_shared_event_service_injector() -> SharedEventServiceInjector:
 
 
 router = APIRouter(prefix='/api/shared-events', tags=['Sharing'])
-shared_event_service_dependency = Depends(
-    get_shared_event_service_injector().depends
-)
+shared_event_service_dependency = Depends(get_shared_event_service_injector().depends)
 
 
 # Read methods
