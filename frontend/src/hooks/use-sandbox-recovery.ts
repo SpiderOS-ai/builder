@@ -33,10 +33,10 @@ interface UseSandboxRecoveryOptions {
  *
  * @param options.conversationId - The conversation ID to recover
  * @param options.conversationStatus - The current conversation status
+ * @param options.refetchConversation - Function to refetch conversation data on tab focus
  * @param options.onSuccess - Callback when recovery succeeds
  * @param options.onError - Callback when recovery fails
  * @returns isResuming - Whether a recovery is in progress
- * @returns attemptRecovery - Function to manually trigger recovery
  */
 export function useSandboxRecovery({
   conversationId,
@@ -50,9 +50,8 @@ export function useSandboxRecovery({
   const { mutate: resumeSandbox, isPending: isResuming } =
     useUnifiedResumeConversationSandbox();
 
-  // Track if we've already attempted recovery for this conversation on initial load
-  const hasAttemptedRecoveryRef = React.useRef<string | null>(null);
-  const isInitialLoadRef = React.useRef(true);
+  // Track which conversation ID we've already processed for initial load recovery
+  const processedConversationIdRef = React.useRef<string | null>(null);
 
   const attemptRecovery = React.useCallback(
     (statusOverride?: ConversationStatus) => {
@@ -101,36 +100,37 @@ export function useSandboxRecovery({
   React.useEffect(() => {
     if (!conversationId || !conversationStatus) return;
 
-    const isNewConversation =
-      hasAttemptedRecoveryRef.current !== conversationId;
+    // Only attempt recovery once per conversation (handles both initial load and navigation)
+    if (processedConversationIdRef.current === conversationId) return;
 
-    // Reset initial load tracking when navigating to a different conversation
-    if (isNewConversation && hasAttemptedRecoveryRef.current !== null) {
-      isInitialLoadRef.current = true;
-    }
+    processedConversationIdRef.current = conversationId;
 
-    // Only attempt recovery on initial load, and only once per conversation
-    if (isInitialLoadRef.current && isNewConversation) {
-      isInitialLoadRef.current = false;
-      hasAttemptedRecoveryRef.current = conversationId;
-
-      if (conversationStatus === "STOPPED") {
-        attemptRecovery();
-      }
+    if (conversationStatus === "STOPPED") {
+      attemptRecovery();
     }
   }, [conversationId, conversationStatus, attemptRecovery]);
 
   // Handle tab focus (visibility change) - refetch conversation status and resume if needed
   useVisibilityChange({
-    conversationId: !!conversationId,
+    enabled: !!conversationId,
     onVisible: async () => {
-      if (!conversationId || !refetchConversation) return;
+      // Skip if no conversation or already resuming (avoid unnecessary refetch)
+      if (!conversationId || !refetchConversation || isResuming) return;
 
-      // Refetch to get fresh status - cached status may be stale if sandbox was paused while tab was inactive
-      const { data } = await refetchConversation();
-      attemptRecovery(data?.status);
+      try {
+        // Refetch to get fresh status - cached status may be stale if sandbox was paused while tab was inactive
+        const { data } = await refetchConversation();
+        attemptRecovery(data?.status);
+      } catch (error) {
+        // Log error but don't crash - user can still interact with the UI
+        // eslint-disable-next-line no-console
+        console.error(
+          "Failed to refetch conversation on visibility change:",
+          error,
+        );
+      }
     },
   });
 
-  return { isResuming, attemptRecovery };
+  return { isResuming };
 }

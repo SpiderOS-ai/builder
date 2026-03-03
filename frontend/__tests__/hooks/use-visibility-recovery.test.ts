@@ -182,7 +182,7 @@ describe("useVisibilityChange", () => {
     it("should not listen for events when enabled=false", () => {
       const onVisible = vi.fn();
 
-      renderHook(() => useVisibilityChange({ onVisible, conversationId: false }));
+      renderHook(() => useVisibilityChange({ onVisible, enabled: false }));
 
       // Simulate tab becoming visible
       Object.defineProperty(document, "visibilityState", {
@@ -201,8 +201,8 @@ describe("useVisibilityChange", () => {
       const onVisible = vi.fn();
 
       const { rerender } = renderHook(
-        ({ conversationId }) => useVisibilityChange({ onVisible, conversationId }),
-        { initialProps: { conversationId: false } },
+        ({ enabled }) => useVisibilityChange({ onVisible, enabled }),
+        { initialProps: { enabled: false } },
       );
 
       // Simulate event while disabled
@@ -213,7 +213,7 @@ describe("useVisibilityChange", () => {
       expect(onVisible).not.toHaveBeenCalled();
 
       // Enable the hook
-      rerender({ conversationId: true });
+      rerender({ enabled: true });
 
       // Now events should be captured
       act(() => {
@@ -248,11 +248,11 @@ describe("useVisibilityChange", () => {
       const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
 
       const { rerender } = renderHook(
-        ({ conversationId }) => useVisibilityChange({ conversationId }),
-        { initialProps: { conversationId: true } },
+        ({ enabled }) => useVisibilityChange({ enabled }),
+        { initialProps: { enabled: true } },
       );
 
-      rerender({ conversationId: false });
+      rerender({ enabled: false });
 
       expect(removeEventListenerSpy).toHaveBeenCalledWith(
         "visibilitychange",

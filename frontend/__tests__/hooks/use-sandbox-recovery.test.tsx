@@ -337,6 +337,81 @@ describe("useSandboxRecovery", () => {
         expect.any(Function),
       );
     });
+
+    it("should NOT call refetch when tab becomes visible while isPending is true", async () => {
+      vi.mocked(useUnifiedResumeConversationSandbox).mockReturnValue({
+        mutate: mockMutate,
+        mutateAsync: vi.fn(),
+        isPending: true,
+        isSuccess: false,
+        isError: false,
+        isIdle: false,
+        data: undefined,
+        error: null,
+        reset: vi.fn(),
+        status: "pending",
+        variables: undefined,
+        failureCount: 0,
+        failureReason: null,
+        submittedAt: 0,
+        context: undefined,
+      } as unknown as ReturnType<typeof useUnifiedResumeConversationSandbox>);
+
+      const mockRefetch = vi.fn().mockResolvedValue({
+        data: { status: "STOPPED" },
+      });
+
+      renderHook(
+        () =>
+          useSandboxRecovery({
+            conversationId: "conv-123",
+            conversationStatus: "RUNNING",
+            refetchConversation: mockRefetch,
+          }),
+        { wrapper: createWrapper() },
+      );
+
+      // Simulate tab becoming visible
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // Refetch should NOT be called because isPending is true
+      expect(mockRefetch).not.toHaveBeenCalled();
+    });
+
+    it("should handle refetch errors gracefully without crashing", async () => {
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const mockRefetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+      renderHook(
+        () =>
+          useSandboxRecovery({
+            conversationId: "conv-123",
+            conversationStatus: "RUNNING",
+            refetchConversation: mockRefetch,
+          }),
+        { wrapper: createWrapper() },
+      );
+
+      // Simulate tab becoming visible
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // Refetch was called
+      expect(mockRefetch).toHaveBeenCalledTimes(1);
+      // Error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Failed to refetch conversation on visibility change:",
+        expect.any(Error),
+      );
+      // No recovery attempt was made (due to error)
+      expect(mockMutate).not.toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe("recovery callbacks", () => {
@@ -488,10 +563,9 @@ describe("useSandboxRecovery", () => {
         { wrapper: createWrapper() },
       );
 
-      // The hook should not expose any disconnect-related functionality
+      // The hook should only expose isResuming - no disconnect-related functionality
       expect(result.current).toEqual({
         isResuming: expect.any(Boolean),
-        attemptRecovery: expect.any(Function),
       });
 
       // No calls should have been made for RUNNING status

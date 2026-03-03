@@ -9,8 +9,8 @@ interface UseVisibilityChangeOptions {
   onVisible?: () => void;
   /** Callback fired only when tab becomes hidden */
   onHidden?: () => void;
-  /** Whether the hook is conversationId (default: true) */
-  conversationId?: boolean;
+  /** Whether to listen for visibility changes (default: true) */
+  enabled?: boolean;
 }
 
 /**
@@ -24,21 +24,21 @@ interface UseVisibilityChangeOptions {
  * @param options.onVisibilityChange - Callback with the new visibility state
  * @param options.onVisible - Callback fired only when tab becomes visible
  * @param options.onHidden - Callback fired only when tab becomes hidden
- * @param options.conversationId - Whether to listen for changes (default: true)
+ * @param options.enabled - Whether to listen for changes (default: true)
  * @returns isVisible - Current visibility state of the tab
  */
 export function useVisibilityChange({
   onVisibilityChange,
   onVisible,
   onHidden,
-  conversationId = true,
+  enabled = true,
 }: UseVisibilityChangeOptions = {}) {
   const [isVisible, setIsVisible] = React.useState(
     () => document.visibilityState === "visible",
   );
 
   React.useEffect(() => {
-    if (!conversationId) return undefined;
+    if (!enabled) return undefined;
 
     const handleVisibilityChange = () => {
       const state = document.visibilityState as VisibilityState;
@@ -58,7 +58,7 @@ export function useVisibilityChange({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [conversationId, onVisibilityChange, onVisible, onHidden]);
+  }, [enabled, onVisibilityChange, onVisible, onHidden]);
 
   return { isVisible };
 }
