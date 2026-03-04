@@ -137,13 +137,20 @@ class LiteLlmManager:
                     client, keycloak_user_id, org_id, team_budget
                 )
 
-                key = await LiteLlmManager._generate_key(
+                generated_key = await LiteLlmManager._generate_key(
                     client,
                     keycloak_user_id,
                     org_id,
                     get_openhands_cloud_key_alias(keycloak_user_id, org_id),
                     None,
                 )
+                if not generated_key:
+                    logger.error(
+                        'LiteLlmManager:create_entries:key_generation_failed',
+                        extra={'org_id': org_id, 'user_id': keycloak_user_id},
+                    )
+                    return None
+                key = generated_key
 
         oss_settings.agent = 'CodeActAgent'
         # Use the model corresponding to the current user settings version
