@@ -1354,7 +1354,9 @@ class TestLiteLlmManager:
                 result1 = await LiteLlmManager._get_team(mock_client, 'team_id')
                 result2 = await LiteLlmManager._get_user(mock_client, 'user_id')
                 # _generate_key raises ValueError when config is missing
-                with pytest.raises(ValueError, match='LiteLLM API configuration not found'):
+                with pytest.raises(
+                    ValueError, match='LiteLLM API configuration not found'
+                ):
                     await LiteLlmManager._generate_key(
                         mock_client, 'user_id', 'team_id', 'alias', {}
                     )
