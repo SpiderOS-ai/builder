@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Optional, cast
 from urllib.parse import quote
 from uuid import UUID as parse_uuid
 
+from openhands.app_server.config import get_global_config
 import posthog
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -162,7 +163,7 @@ async def keycloak_callback(
     # Extract redirect URL, reCAPTCHA token, and invitation token from state
     redirect_url, recaptcha_token, invitation_token = _extract_oauth_state(state)
     if not redirect_url:
-        redirect_url = str(request.base_url)
+        redirect_url = get_global_config().web_url
 
     if not code:
         # check if this is a forward from the account linking page
@@ -171,31 +172,19 @@ async def keycloak_callback(
             and error_description == 'authentication_expired'
         ):
             return RedirectResponse(redirect_url, status_code=302)
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={'error': 'Missing code in request params'},
-        )
-    scheme = 'http' if request.url.hostname == 'localhost' else 'https'
-    redirect_uri = f'{scheme}://{request.url.netloc}{request.url.path}'
-    logger.debug(f'code: {code}, redirect_uri: {redirect_uri}')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, {'error': 'Missing code in request params'})
 
     (
         keycloak_access_token,
         keycloak_refresh_token,
     ) = await token_manager.get_keycloak_tokens(code, redirect_uri)
     if not keycloak_access_token or not keycloak_refresh_token:
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={'error': 'Problem retrieving Keycloak tokens'},
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, {'error': 'Problem retrieving Keycloak tokens'})
 
     user_info = await token_manager.get_user_info(keycloak_access_token)
     logger.debug(f'user_info: {user_info}')
     if ROLE_CHECK_ENABLED and user_info.roles is None:
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={'error': 'Missing required role'},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': 'Missing required role'})
 
     if user_info.preferred_username is None:
         return JSONResponse(
@@ -215,7 +204,7 @@ async def keycloak_callback(
             await token_manager.delete_keycloak_user(user_id)
 
             # Return unauthorized
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': 'Access denied'})
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': authorization.detail})
 
         user = await UserStore.create_user(user_id, user_info_dict)
     else:
@@ -273,43 +262,6 @@ async def keycloak_callback(
             logger.exception(f'reCAPTCHA verification error at callback: {e}')
             # Fail open - continue with login if reCAPTCHA service unavailable
 
-    # Check for duplicate email with + modifier
-    if email:
-        try:
-            has_duplicate = await token_manager.check_duplicate_base_email(
-                email, user_id
-            )
-            if has_duplicate:
-                logger.warning(
-                    f'Blocked signup attempt for email {email} - duplicate base email found',
-                    extra={'user_id': user_id, 'email': email},
-                )
-
-                # Delete the Keycloak user that was automatically created during OAuth
-                # This prevents orphaned accounts in Keycloak
-                # The delete_keycloak_user method already handles all errors internally
-                deletion_success = await token_manager.delete_keycloak_user(user_id)
-                if deletion_success:
-                    logger.info(
-                        f'Deleted Keycloak user {user_id} after detecting duplicate email {email}'
-                    )
-                else:
-                    logger.warning(
-                        f'Failed to delete Keycloak user {user_id} after detecting duplicate email {email}. '
-                        f'User may need to be manually cleaned up.'
-                    )
-
-                # Redirect to home page with query parameter indicating the issue
-                home_url = f'{request.base_url}/login?duplicated_email=true'
-                return RedirectResponse(home_url, status_code=302)
-        except Exception as e:
-            # Log error but allow signup to proceed (fail open)
-            logger.error(
-                f'Error checking duplicate email for {email}: {e}',
-                extra={'user_id': user_id, 'email': email},
-            )
-    # END REMOVE
-
     # Check email verification status
     email_verified = user_info.email_verified or False
     if not email_verified:
@@ -318,7 +270,7 @@ async def keycloak_callback(
         from server.routes.email import verify_email
 
         await verify_email(request=request, user_id=user_id, is_auth_flow=True)
-        verification_redirect_url = f'{request.base_url}login?email_verification_required=true&user_id={user_id}'
+        verification_redirect_url = f'{get_global_config().web_url}login?email_verification_required=true&user_id={user_id}'
         # Preserve invitation token so it can be included in OAuth state after verification
         if invitation_token:
             verification_redirect_url = (
@@ -339,15 +291,6 @@ async def keycloak_callback(
     await token_manager.store_idp_tokens(
         ProviderType(idp), user_id, keycloak_access_token
     )
-
-    # Start delete
-    username = user_info.preferred_username
-    if user_verifier.is_active() and not user_verifier.is_user_allowed(username):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={'error': 'Not authorized via waitlist'},
-        )
-    # End delete
 
     valid_offline_token = (
         await token_manager.validate_offline_token(user_id=user_info.sub)
