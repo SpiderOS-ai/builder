@@ -237,6 +237,137 @@ async def test_get_provider_tokens(mock_token_manager):
     pass
 
 
+class TestGetProviderTokensBitbucketDCHost:
+    """Tests for Bitbucket DC host fallback from BITBUCKET_DATA_CENTER_TOKEN_URL."""
+
+    def _make_auth_token(self):
+        mock_token = MagicMock()
+        mock_token.identity_provider = 'bitbucket_data_center'
+        mock_token.id = 'token-id-1'
+        return mock_token
+
+    @pytest.mark.asyncio
+    async def test_host_derived_from_token_url(self):
+        """host is populated from BITBUCKET_DATA_CENTER_TOKEN_URL when user secrets lack it."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch('server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_TOKEN_URL',
+                  'https://bitbucket.company.com/rest/oauth2/latest/token'),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = [self._make_auth_token()]
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session_maker.return_value = mock_session
+
+            access_payload = {
+                'sub': 'test_user_id',
+                'exp': int(time.time()) + 3600,
+            }
+            access_token = jwt.encode(access_payload, 'secret', algorithm='HS256')
+
+            user_auth = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+                access_token=SecretStr(access_token),
+            )
+            # No user secrets — get_secrets() returns None
+            user_auth.get_secrets = AsyncMock(return_value=None)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert result[ProviderType.BITBUCKET_DATA_CENTER].host == 'bitbucket.company.com'
+
+    @pytest.mark.asyncio
+    async def test_host_from_user_secrets_takes_priority(self):
+        """User-configured host in secrets takes priority over the token URL fallback."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch('server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_TOKEN_URL',
+                  'https://bitbucket.company.com/rest/oauth2/latest/token'),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = [self._make_auth_token()]
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session_maker.return_value = mock_session
+
+            access_payload = {
+                'sub': 'test_user_id',
+                'exp': int(time.time()) + 3600,
+            }
+            access_token = jwt.encode(access_payload, 'secret', algorithm='HS256')
+
+            user_auth = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+                access_token=SecretStr(access_token),
+            )
+            from openhands.storage.data_models.secrets import Secrets
+
+            user_secrets = Secrets(
+                provider_tokens={
+                    ProviderType.BITBUCKET_DATA_CENTER: ProviderToken(
+                        token=SecretStr('existing_token'),
+                        host='custom.bitbucket.host',
+                    )
+                }
+            )
+            user_auth.get_secrets = AsyncMock(return_value=user_secrets)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert result[ProviderType.BITBUCKET_DATA_CENTER].host == 'custom.bitbucket.host'
+
+    @pytest.mark.asyncio
+    async def test_host_remains_none_when_token_url_empty(self):
+        """host stays None when BITBUCKET_DATA_CENTER_TOKEN_URL is empty."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch('server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_TOKEN_URL', ''),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = [self._make_auth_token()]
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session_maker.return_value = mock_session
+
+            access_payload = {
+                'sub': 'test_user_id',
+                'exp': int(time.time()) + 3600,
+            }
+            access_token = jwt.encode(access_payload, 'secret', algorithm='HS256')
+
+            user_auth = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+                access_token=SecretStr(access_token),
+            )
+            user_auth.get_secrets = AsyncMock(return_value=None)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert result[ProviderType.BITBUCKET_DATA_CENTER].host is None
+
+
 @pytest.mark.asyncio
 async def test_get_provider_tokens_cached(mock_token_manager):
     """Test that get_provider_tokens returns cached tokens if available."""

@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
+from urllib.parse import urlparse
 
 import jwt
 from fastapi import Request
@@ -14,6 +15,7 @@ from server.auth.auth_error import (
     NoCredentialsError,
 )
 from server.auth.domain_blocker import domain_blocker
+from server.auth.constants import BITBUCKET_DATA_CENTER_TOKEN_URL
 from server.auth.token_manager import TokenManager
 from server.config import get_config
 from server.logger import logger
@@ -176,6 +178,10 @@ class SaasUserAuth(UserAuth):
                     host = None
                     if user_secrets and idp_type in user_secrets.provider_tokens:
                         host = user_secrets.provider_tokens[idp_type].host
+
+                    if idp_type == ProviderType.BITBUCKET_DATA_CENTER and not host:
+                        parsed = urlparse(BITBUCKET_DATA_CENTER_TOKEN_URL)
+                        host = parsed.hostname or None
 
                     provider_token = await token_manager.get_idp_token(
                         access_token.get_secret_value(),
