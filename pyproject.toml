@@ -33,7 +33,7 @@ dependencies = [
   "dirhash",
   "docker",
   "fastapi",
-  "fastmcp>=2.14.3,<3",
+  "fastmcp>=2.14.3",
   "google-api-python-client>=2.164",
   "google-auth-httplib2",
   "google-auth-oauthlib",
