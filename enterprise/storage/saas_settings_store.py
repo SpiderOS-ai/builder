@@ -259,7 +259,6 @@ class SaasSettingsStore(SettingsStore):
             org_id,
             openhands_type=openhands_type,
         ):
-            generated_key = None
             if openhands_type:
                 generated_key = await LiteLlmManager.generate_key(
                     self.user_id,
@@ -278,14 +277,8 @@ class SaasSettingsStore(SettingsStore):
                     None,
                 )
 
-            if generated_key:
-                item.llm_api_key = SecretStr(generated_key)
-                logger.info(
-                    'saas_settings_store:store:generated_openhands_key',
-                    extra={'user_id': self.user_id},
-                )
-            else:
-                logger.warning(
-                    'saas_settings_store:store:failed_to_generate_openhands_key',
-                    extra={'user_id': self.user_id},
-                )
+            item.llm_api_key = SecretStr(generated_key)
+            logger.info(
+                'saas_settings_store:store:generated_openhands_key',
+                extra={'user_id': self.user_id},
+            )
