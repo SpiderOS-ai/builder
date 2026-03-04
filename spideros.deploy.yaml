@@ -1,0 +1,57 @@
+name: builder
+namespace: builder
+repo: git@github.com:SpiderOS-ai/builder.git
+
+# Builder: AI coding agent with OIDC + Claude Max
+# OpenHands OSS fork + custom Zitadel authentication + per-user storage
+
+containers:
+  - name: builder
+    dockerfile: ./Dockerfile
+    port: 3000
+    image: builder
+    deployment: builder
+    command: ["python3", "/app/entrypoint.py"]
+    env:
+      - name: LLM_MODEL
+        value: "claude-sonnet-4-20250514"
+      - name: LLM_BASE_URL
+        value: "http://claude-runner.spider-claude-runner.svc.cluster.local:8000/v1"
+      - name: LLM_API_KEY
+        value: "dummy"
+      - name: SANDBOX_BASE_CONTAINER_IMAGE
+        value: "nikolaik/python-nodejs:python3.12-nodejs22"
+      - name: FILE_STORE_PATH
+        value: "/.openhands"
+      - name: OIDC_ISSUER
+        value: "https://auth.spideros.dev"
+    volumeMounts:
+      - name: claude-credentials
+        mountPath: /root/.claude
+        readOnly: true
+      - name: docker-socket
+        mountPath: /var/run/docker.sock
+      - name: openhands-storage
+        mountPath: /.openhands
+
+volumes:
+  - name: claude-credentials
+    secret:
+      secretName: claude-credentials
+      defaultMode: 0400
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+  - name: openhands-storage
+    emptyDir: {}
+
+routing:
+  domain_prefix: builder
+  oauth: true
+  paths:
+    - prefix: /
+      container: builder
+
+# OIDC is handled by kgateway TrafficPolicy (builder-oauth2)
+# Per-user storage: /.openhands/{user_id}/settings.json, secrets.json
