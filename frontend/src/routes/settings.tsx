@@ -27,15 +27,38 @@ export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   }
 
   const isSaas = config?.app_mode === "saas";
+  const featureFlags = config?.feature_flags;
 
   if (!isSaas && SAAS_ONLY_PATHS.includes(pathname)) {
     // if in OSS mode, do not allow access to saas-only paths
     return redirect("/settings");
   }
+
+  // Redirect if page is hidden via feature flags
+  if (featureFlags?.hide_users_page && pathname === "/settings/user") {
+    return redirect("/settings");
+  }
+  if (featureFlags?.hide_billing_page && pathname === "/settings/billing") {
+    return redirect("/settings");
+  }
+  if (
+    featureFlags?.hide_integrations_page &&
+    pathname === "/settings/integrations"
+  ) {
+    return redirect("/settings");
+  }
+
   // If LLM settings are hidden and user tries to access the LLM settings page
-  if (config?.feature_flags?.hide_llm_settings && pathname === "/settings") {
+  if (featureFlags?.hide_llm_settings && pathname === "/settings") {
     // Redirect to the first available settings page
-    return isSaas ? redirect("/settings/user") : redirect("/settings/mcp");
+    if (isSaas) {
+      // Find first available page when Users might also be hidden
+      if (!featureFlags?.hide_users_page) {
+        return redirect("/settings/user");
+      }
+      return redirect("/settings/integrations");
+    }
+    return redirect("/settings/mcp");
   }
 
   return null;
