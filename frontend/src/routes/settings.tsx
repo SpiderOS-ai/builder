@@ -4,7 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Route } from "./+types/settings";
 import OptionService from "#/api/option-service/option-service.api";
 import { queryClient } from "#/query-client-config";
-import { WebClientConfig } from "#/api/option-service/option.types";
+import {
+  WebClientConfig,
+  WebClientFeatureFlags,
+} from "#/api/option-service/option.types";
 import { SettingsLayout } from "#/components/features/settings/settings-layout";
 import { Typography } from "#/ui/typography";
 import { useSettingsNavItems } from "#/hooks/use-settings-nav-items";
@@ -15,6 +18,62 @@ const SAAS_ONLY_PATHS = [
   "/settings/credits",
   "/settings/api-keys",
 ];
+
+/**
+ * Checks if a settings page should be hidden based on feature flags.
+ * Used by both the route loader and navigation hook to keep logic in sync.
+ */
+export function isSettingsPageHidden(
+  path: string,
+  featureFlags: WebClientFeatureFlags | undefined,
+): boolean {
+  if (featureFlags?.hide_llm_settings && path === "/settings") return true;
+  if (featureFlags?.hide_users_page && path === "/settings/user") return true;
+  if (featureFlags?.hide_billing_page && path === "/settings/billing")
+    return true;
+  if (featureFlags?.hide_integrations_page && path === "/settings/integrations")
+    return true;
+  return false;
+}
+
+/**
+ * Find the first available settings page that is not hidden.
+ * Returns null if no page is available (shouldn't happen in practice).
+ */
+export function getFirstAvailablePath(
+  isSaas: boolean,
+  featureFlags: WebClientFeatureFlags | undefined,
+): string | null {
+  const saasFallbackOrder = [
+    { path: "/settings/user", hidden: !!featureFlags?.hide_users_page },
+    {
+      path: "/settings/integrations",
+      hidden: !!featureFlags?.hide_integrations_page,
+    },
+    { path: "/settings/app", hidden: false },
+    { path: "/settings", hidden: !!featureFlags?.hide_llm_settings },
+    { path: "/settings/billing", hidden: !!featureFlags?.hide_billing_page },
+    { path: "/settings/secrets", hidden: false },
+    { path: "/settings/api-keys", hidden: false },
+    { path: "/settings/mcp", hidden: false },
+  ];
+
+  const ossFallbackOrder = [
+    { path: "/settings", hidden: !!featureFlags?.hide_llm_settings },
+    { path: "/settings/mcp", hidden: false },
+    {
+      path: "/settings/integrations",
+      hidden: !!featureFlags?.hide_integrations_page,
+    },
+    { path: "/settings/app", hidden: false },
+    { path: "/settings/secrets", hidden: false },
+  ];
+
+  const fallbackOrder = isSaas ? saasFallbackOrder : ossFallbackOrder;
+  const firstAvailable = fallbackOrder.find((item) => !item.hidden);
+
+  return firstAvailable?.path ?? null;
+}
 
 export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const url = new URL(request.url);
@@ -29,36 +88,17 @@ export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const isSaas = config?.app_mode === "saas";
   const featureFlags = config?.feature_flags;
 
-  if (!isSaas && SAAS_ONLY_PATHS.includes(pathname)) {
-    // if in OSS mode, do not allow access to saas-only paths
-    return redirect("/settings");
-  }
+  // Check if current page should be hidden and redirect to first available page
+  const isHiddenPage =
+    (!isSaas && SAAS_ONLY_PATHS.includes(pathname)) ||
+    isSettingsPageHidden(pathname, featureFlags);
 
-  // Redirect if page is hidden via feature flags
-  if (featureFlags?.hide_users_page && pathname === "/settings/user") {
-    return redirect("/settings");
-  }
-  if (featureFlags?.hide_billing_page && pathname === "/settings/billing") {
-    return redirect("/settings");
-  }
-  if (
-    featureFlags?.hide_integrations_page &&
-    pathname === "/settings/integrations"
-  ) {
-    return redirect("/settings");
-  }
-
-  // If LLM settings are hidden and user tries to access the LLM settings page
-  if (featureFlags?.hide_llm_settings && pathname === "/settings") {
-    // Redirect to the first available settings page
-    if (isSaas) {
-      // Find first available page when Users might also be hidden
-      if (!featureFlags?.hide_users_page) {
-        return redirect("/settings/user");
-      }
-      return redirect("/settings/integrations");
+  if (isHiddenPage) {
+    const fallbackPath = getFirstAvailablePath(isSaas, featureFlags);
+    if (fallbackPath && fallbackPath !== pathname) {
+      return redirect(fallbackPath);
     }
-    return redirect("/settings/mcp");
+    // If no fallback available or same as current, stay on current page
   }
 
   return null;
