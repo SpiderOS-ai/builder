@@ -172,19 +172,19 @@ async def keycloak_callback(
             and error_description == 'authentication_expired'
         ):
             return RedirectResponse(redirect_url, status_code=302)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, {'error': 'Missing code in request params'})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing code in request params')
 
     (
         keycloak_access_token,
         keycloak_refresh_token,
     ) = await token_manager.get_keycloak_tokens(code, redirect_uri)
     if not keycloak_access_token or not keycloak_refresh_token:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, {'error': 'Problem retrieving Keycloak tokens'})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Problem retrieving Keycloak tokens')
 
     user_info = await token_manager.get_user_info(keycloak_access_token)
     logger.debug(f'user_info: {user_info}')
     if ROLE_CHECK_ENABLED and user_info.roles is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': 'Missing required role'})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing required role')
 
     if user_info.preferred_username is None:
         return JSONResponse(
@@ -204,7 +204,7 @@ async def keycloak_callback(
             await token_manager.delete_keycloak_user(user_id)
 
             # Return unauthorized
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': authorization.detail})
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=authorization.detail)
 
         user = await UserStore.create_user(user_id, user_info_dict)
     else:

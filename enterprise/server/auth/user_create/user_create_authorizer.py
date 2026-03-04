@@ -1,4 +1,3 @@
-import os
 from openhands.agent_server.env_parser import from_env
 
 
@@ -8,10 +7,12 @@ class UserCreateAuthorization(BaseModel):
 
 
 class UserCreateAuthorizer(ABC):
-    """ Class determining whether a user may be created."""
+    """Class determining whether a user may be created."""
 
     @abstractmethod
-    async def authorize_user_create(self, user_info: KeycloakUserInfo) -> UserCreateAuthorization:
+    async def authorize_user_create(
+        self, user_info: KeycloakUserInfo
+    ) -> UserCreateAuthorization:
         """Determine whether the info given is permitted when creating an account."""
 
 
@@ -22,9 +23,13 @@ class UserCreateAuthorizerInjector(
 
 
 def depends_user_create_authorizer():
-    injector: UserCreateAuthorizerInjector = from_env(UserCreateAuthorizerInjector, 'OH_USER_CREATE_AUTHORIZER')
+    injector: UserCreateAuthorizerInjector = from_env(
+        UserCreateAuthorizerInjector, 'OH_USER_CREATE_AUTHORIZER'
+    )
     if injector is None:
-        from server.auth.default_user_create_authorizer import DefaultUserCreateAuthorizerInjector
+        from server.auth.default_user_create_authorizer import (
+            DefaultUserCreateAuthorizerInjector,
+        )
 
         injector = DefaultUserCreateAuthorizerInjector()
     return Depends(injector.depends)
