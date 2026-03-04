@@ -11,6 +11,7 @@ import "./index.css";
 import React from "react";
 import { Toaster } from "react-hot-toast";
 import { useInvitation } from "#/hooks/use-invitation";
+import { SpiderosShell } from "./spideros";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -22,7 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <SpiderosShell>{children}</SpiderosShell>
         <ScrollRestoration />
         <Scripts />
         <Toaster />
