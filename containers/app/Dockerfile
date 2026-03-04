@@ -87,9 +87,13 @@ RUN find /app \! -group openhands -exec chgrp openhands {} +
 COPY --chown=openhands:openhands --chmod=770 --from=frontend-builder /app/build ./frontend/build
 COPY --chown=openhands:openhands --chmod=770 ./containers/app/entrypoint.sh /app/entrypoint.sh
 
+# SpiderOS: add oidc_auth layer and custom entrypoint
+COPY --chown=openhands:openhands --chmod=770 ./oidc_auth/ /app/oidc_auth/
+COPY --chown=openhands:openhands --chmod=770 ./entrypoint.py /app/entrypoint.py
+
 USER root
 
 WORKDIR /app
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uvicorn", "openhands.server.listen:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["python3", "/app/entrypoint.py"]
