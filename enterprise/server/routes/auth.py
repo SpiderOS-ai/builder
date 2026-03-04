@@ -24,6 +24,7 @@ from server.auth.gitlab_sync import schedule_gitlab_repo_sync
 from server.auth.recaptcha_service import recaptcha_service
 from server.auth.saas_user_auth import SaasUserAuth
 from server.auth.token_manager import TokenManager
+from server.auth.user_create_authorizer import depends_user_create_authorizer, UserCreateAuthorizer
 from server.config import sign_token
 from server.constants import IS_FEATURE_ENV
 from server.routes.event_webhook import _get_session_api_key, _get_user_id
@@ -156,6 +157,7 @@ async def keycloak_callback(
     state: Optional[str] = None,
     error: Optional[str] = None,
     error_description: Optional[str] = None,
+    user_create_authorizer: UserCreateAuthorizer = depends_user_create_authorizer(),
 ):
     # Extract redirect URL, reCAPTCHA token, and invitation token from state
     redirect_url, recaptcha_token, invitation_token = _extract_oauth_state(state)
@@ -206,20 +208,20 @@ async def keycloak_callback(
     user_info_dict = user_info.model_dump(exclude_none=True)
     user = await UserStore.get_user_by_id(user_id)
     if not user:
+
+        authorization = await user_create_authorizer.authorize_user_create
+        if not authorization.success:
+            # If the we are not permitted to creat the user, delete them in keycloak
+            await token_manager.delete_keycloak_user(user_id)
+
+            # Return unauthorized
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, {'error': 'Access denied'})
+
         user = await UserStore.create_user(user_id, user_info_dict)
     else:
         # Existing user — gradually backfill contact_name if it still has a username-style value
         await UserStore.backfill_contact_name(user_id, user_info_dict)
         await UserStore.backfill_user_email(user_id, user_info_dict)
-
-    if not user:
-        logger.error(f'Failed to authenticate user {user_info.preferred_username}')
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                'error': f'Failed to authenticate user {user_info.preferred_username}'
-            },
-        )
 
     logger.info(f'Logging in user {str(user.id)} in org {user.current_org_id}')
 
@@ -271,22 +273,6 @@ async def keycloak_callback(
             logger.exception(f'reCAPTCHA verification error at callback: {e}')
             # Fail open - continue with login if reCAPTCHA service unavailable
 
-    # Check if email domain is blocked
-    if email and await domain_blocker.is_domain_blocked(email):
-        logger.warning(
-            f'Blocked authentication attempt for email: {email}, user_id: {user_id}'
-        )
-
-        # Disable the Keycloak account
-        await token_manager.disable_keycloak_user(user_id, email)
-
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                'error': 'Access denied: Your email domain is not allowed to access this service'
-            },
-        )
-
     # Check for duplicate email with + modifier
     if email:
         try:
@@ -322,6 +308,7 @@ async def keycloak_callback(
                 f'Error checking duplicate email for {email}: {e}',
                 extra={'user_id': user_id, 'email': email},
             )
+    # END REMOVE
 
     # Check email verification status
     email_verified = user_info.email_verified or False
@@ -353,12 +340,14 @@ async def keycloak_callback(
         ProviderType(idp), user_id, keycloak_access_token
     )
 
+    # Start delete
     username = user_info.preferred_username
     if user_verifier.is_active() and not user_verifier.is_user_allowed(username):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={'error': 'Not authorized via waitlist'},
         )
+    # End delete
 
     valid_offline_token = (
         await token_manager.validate_offline_token(user_id=user_info.sub)

@@ -46,7 +46,7 @@ class UserStore:
         user_id: str,
         user_info: dict,
         role_id: Optional[int] = None,
-    ) -> User | None:
+    ) -> User:
         """Create a new user."""
         async with a_session_maker() as session:
             # create personal org
