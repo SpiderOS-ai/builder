@@ -718,27 +718,29 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         return user_search_key or service_tavily_key
 
     async def _add_system_mcp_servers(
-        self, mcp_servers: dict[str, Any], user: UserInfo
+        self, mcp_servers: dict[str, Any], user: UserInfo, conversation_id: UUID
     ) -> None:
         """Add system-generated MCP servers (default OpenHands server and Tavily).
 
         Args:
             mcp_servers: Dictionary to add servers to
             user: User information for API keys
+            conversation_id: Conversation ID forwarded to the OpenHands MCP server
         """
         if not self.web_url:
             return
 
         # Add default OpenHands MCP server
         mcp_url = f'{self.web_url}/mcp/mcp'
-        mcp_servers['default'] = {'url': mcp_url}
+        mcp_servers['default'] = {
+            'url': mcp_url,
+            'headers': {'X-OpenHands-ServerConversation-ID': str(conversation_id)},
+        }
 
         # Add API key if available
         mcp_api_key = await self.user_context.get_mcp_api_key()
         if mcp_api_key:
-            mcp_servers['default']['headers'] = {
-                'X-Session-API-Key': mcp_api_key,
-            }
+            mcp_servers['default']['headers']['X-Session-API-Key'] = mcp_api_key
 
         # Add Tavily search if API key is available
         tavily_api_key = await self._get_tavily_api_key(user)
@@ -870,13 +872,14 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
 
     async def _configure_llm_and_mcp(
-        self, user: UserInfo, llm_model: str | None
+        self, user: UserInfo, llm_model: str | None, conversation_id: UUID
     ) -> tuple[LLM, dict]:
         """Configure LLM and MCP (Model Context Protocol) settings.
 
         Args:
             user: User information containing LLM preferences
             llm_model: Optional specific model to use, falls back to user default
+            conversation_id: Conversation ID forwarded to the OpenHands MCP server
 
         Returns:
             Tuple of (configured LLM instance, MCP config dictionary)
@@ -888,7 +891,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         mcp_servers: dict[str, Any] = {}
 
         # Add system-generated servers (default + tavily)
-        await self._add_system_mcp_servers(mcp_servers, user)
+        await self._add_system_mcp_servers(mcp_servers, user, conversation_id)
 
         # Merge custom servers from user settings
         self._merge_custom_mcp_config(mcp_servers, user)
@@ -1199,12 +1202,15 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         """
         user = await self.user_context.get_user_info()
         workspace = LocalWorkspace(working_dir=working_dir)
+        conversation_id = conversation_id or uuid4()
 
         # Set up secrets for all git providers
         secrets = await self._setup_secrets_for_git_providers(user)
 
         # Configure LLM and MCP
-        llm, mcp_config = await self._configure_llm_and_mcp(user, llm_model)
+        llm, mcp_config = await self._configure_llm_and_mcp(
+            user, llm_model, conversation_id
+        )
 
         # Create agent with context
         agent = self._create_agent_with_context(

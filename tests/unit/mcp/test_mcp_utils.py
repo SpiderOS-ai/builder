@@ -262,46 +262,6 @@ async def test_fetch_mcp_tools_from_config_with_stdio(mock_create_clients):
 
 
 @pytest.mark.asyncio
-async def test_add_mcp_tools_to_agent_passes_conversation_id():
-    """Test add_mcp_tools_to_agent forwards conversation_id into MCP client creation.
-
-    This is required so the MCP server can include the OpenHands conversation URL
-    in PR/MR descriptions (see openhands.server.routes.mcp.get_conversation_link).
-    """
-    from openhands.core.config.mcp_config import MCPConfig
-
-    agent = MagicMock()
-    runtime = MagicMock()
-    runtime.runtime_initialized = True
-    updated_config = MCPConfig()
-    runtime.get_mcp_config.return_value = updated_config
-
-    memory = MagicMock()
-    memory.get_microagent_mcp_tools.return_value = []
-
-    tools = [{'function': {'name': 'tool1'}}]
-
-    with patch(
-        'openhands.mcp.utils.fetch_mcp_tools_from_config',
-        new=AsyncMock(return_value=tools),
-    ) as mock_fetch:
-        returned_config = await openhands.mcp.utils.add_mcp_tools_to_agent(
-            agent,
-            runtime,
-            memory,
-            conversation_id='test-conv-id',
-        )
-
-    mock_fetch.assert_awaited_once_with(
-        updated_config,
-        conversation_id='test-conv-id',
-        use_stdio=False,
-    )
-    agent.set_mcp_tools.assert_called_once_with(tools)
-    assert returned_config is updated_config
-
-
-@pytest.mark.asyncio
 async def test_call_tool_mcp_stdio_client():
     """Test calling MCP tool on a stdio client."""
     # Create mock stdio client with the requested tool

@@ -161,7 +161,7 @@ async def run_controller(
         )
         runtime.config.mcp.stdio_servers.extend(openhands_mcp_stdio_servers)
 
-        await add_mcp_tools_to_agent(agent, runtime, memory, conversation_id=sid)
+        await add_mcp_tools_to_agent(agent, runtime, memory)
 
     replay_events: list[Event] | None = None
     if config.replay_trajectory_path:

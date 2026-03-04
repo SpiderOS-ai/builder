@@ -5,7 +5,7 @@ import json
 import os
 import zipfile
 from datetime import datetime
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -114,6 +114,9 @@ class TestLiveStatusAppConversationService:
         self.mock_sandbox = Mock(spec=SandboxInfo)
         self.mock_sandbox.id = uuid4()
         self.mock_sandbox.status = SandboxStatus.RUNNING
+
+        # Stable conversation ID for tests that call _configure_llm_and_mcp directly
+        self.conversation_id = uuid4()
 
     def test_apply_suggested_task_sets_prompt_and_trigger(self):
         """Test suggested task prompts populate initial message and trigger."""
@@ -459,7 +462,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, custom_model
+            self.mock_user, custom_model, self.conversation_id
         )
 
         # Assert
@@ -475,6 +478,9 @@ class TestLiveStatusAppConversationService:
             mcp_config['mcpServers']['default']['url']
             == 'https://test.example.com/mcp/mcp'
         )
+        assert mcp_config['mcpServers']['default']['headers'][
+            'X-OpenHands-ServerConversation-ID'
+        ] == str(self.conversation_id)
         assert (
             mcp_config['mcpServers']['default']['headers']['X-Session-API-Key']
             == 'mcp_api_key'
@@ -490,7 +496,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, _ = await self.service._configure_llm_and_mcp(
-            self.mock_user, self.mock_user.llm_model
+            self.mock_user, self.mock_user.llm_model, self.conversation_id
         )
 
         # Assert
@@ -506,7 +512,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, _ = await self.service._configure_llm_and_mcp(
-            self.mock_user, self.mock_user.llm_model
+            self.mock_user, self.mock_user.llm_model, self.conversation_id
         )
 
         # Assert
@@ -523,7 +529,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, _ = await self.service._configure_llm_and_mcp(
-            self.mock_user, self.mock_user.llm_model
+            self.mock_user, self.mock_user.llm_model, self.conversation_id
         )
 
         # Assert
@@ -539,7 +545,9 @@ class TestLiveStatusAppConversationService:
         self.mock_user_context.get_mcp_api_key.return_value = None
 
         # Act
-        llm, _ = await self.service._configure_llm_and_mcp(self.mock_user, None)
+        llm, _ = await self.service._configure_llm_and_mcp(
+            self.mock_user, None, self.conversation_id
+        )
 
         # Assert
         assert llm.base_url == 'https://user-llm.example.com'
@@ -552,14 +560,17 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
         assert llm.model == self.mock_user.llm_model
         assert 'mcpServers' in mcp_config
         assert 'default' in mcp_config['mcpServers']
-        assert 'headers' not in mcp_config['mcpServers']['default']
+
+        headers = mcp_config['mcpServers']['default']['headers']
+        assert headers['X-OpenHands-ServerConversation-ID'] == str(self.conversation_id)
+        assert 'X-Session-API-Key' not in headers
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_without_web_url(self):
@@ -569,7 +580,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -585,7 +596,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -607,7 +618,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -630,7 +641,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -652,7 +663,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -676,7 +687,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -699,7 +710,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -722,7 +733,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -745,7 +756,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1115,8 +1126,11 @@ class TestLiveStatusAppConversationService:
             self.mock_user
         )
         self.service._configure_llm_and_mcp.assert_called_once_with(
-            self.mock_user, 'gpt-4'
+            self.mock_user, 'gpt-4', ANY
         )
+        generated_conversation_id = self.service._configure_llm_and_mcp.call_args.args[
+            2
+        ]
         self.service._create_agent_with_context.assert_called_once_with(
             mock_llm,
             AgentType.DEFAULT,
@@ -1128,6 +1142,10 @@ class TestLiveStatusAppConversationService:
             working_dir='/test/dir',
         )
         self.service._finalize_conversation_request.assert_called_once()
+        assert (
+            self.service._finalize_conversation_request.call_args.args[1]
+            == generated_conversation_id
+        )
 
     @pytest.mark.asyncio
     async def test_export_conversation_success(self):
@@ -1525,7 +1543,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1571,7 +1589,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1608,7 +1626,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1645,7 +1663,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1678,7 +1696,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert - should still return valid config with system servers only
@@ -1695,7 +1713,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert - SDK expects {'mcpServers': {...}} format
@@ -1720,7 +1738,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1742,7 +1760,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1769,7 +1787,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1798,7 +1816,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1828,7 +1846,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert
@@ -1879,7 +1897,7 @@ class TestLiveStatusAppConversationService:
 
         # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
-            self.mock_user, None
+            self.mock_user, None, self.conversation_id
         )
 
         # Assert

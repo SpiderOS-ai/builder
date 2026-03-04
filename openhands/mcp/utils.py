@@ -287,10 +287,7 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: MCPAction) -> Obse
 
 
 async def add_mcp_tools_to_agent(
-    agent: 'Agent',
-    runtime: Runtime,
-    memory: 'Memory',
-    conversation_id: str | None = None,
+    agent: 'Agent', runtime: Runtime, memory: 'Memory'
 ) -> MCPConfig:
     """Add MCP tools to an agent."""
     import sys
@@ -330,9 +327,7 @@ async def add_mcp_tools_to_agent(
     # Fetch the MCP tools
     # Only use stdio if run from a CLI runtime
     mcp_tools = await fetch_mcp_tools_from_config(
-        updated_mcp_config,
-        conversation_id=conversation_id,
-        use_stdio=isinstance(runtime, CLIRuntime),
+        updated_mcp_config, use_stdio=isinstance(runtime, CLIRuntime)
     )
 
     tool_names = [tool['function']['name'] for tool in mcp_tools]

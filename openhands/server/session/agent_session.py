@@ -173,12 +173,7 @@ class AgentSession:
             # NOTE: this needs to happen before controller is created
             # so MCP tools can be included into the SystemMessageAction
             if self.runtime and runtime_connected and agent.config.enable_mcp:
-                await add_mcp_tools_to_agent(
-                    agent,
-                    self.runtime,
-                    self.memory,
-                    conversation_id=self.sid,
-                )
+                await add_mcp_tools_to_agent(agent, self.runtime, self.memory)
 
             if replay_json:
                 initial_message = self._run_replay(
