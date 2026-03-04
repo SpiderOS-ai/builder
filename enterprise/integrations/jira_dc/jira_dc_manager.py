@@ -42,7 +42,7 @@ from openhands.server.user_auth.user_auth import UserAuth
 from openhands.utils.http_session import httpx_verify_option
 
 
-class JiraDcManager(Manager):
+class JiraDcManager(Manager[JiraDcViewInterface]):
     def __init__(self, token_manager: TokenManager):
         self.token_manager = token_manager
         self.integration_store = JiraDcIntegrationStore.get_instance()
@@ -353,7 +353,7 @@ class JiraDcManager(Manager):
             logger.error(f'[Jira DC] Error in is_job_requested: {str(e)}')
             return False
 
-    async def start_job(self, jira_dc_view: JiraDcViewInterface):
+    async def start_job(self, jira_dc_view: JiraDcViewInterface) -> None:
         """Start a Jira DC job/conversation."""
         # Import here to prevent circular import
         from server.conversation_callback_processor.jira_dc_callback_processor import (

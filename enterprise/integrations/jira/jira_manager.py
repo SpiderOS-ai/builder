@@ -57,7 +57,7 @@ JIRA_CLOUD_API_URL = 'https://api.atlassian.com/ex/jira'
 OH_LABEL, INLINE_OH_LABEL = get_oh_labels(HOST)
 
 
-class JiraManager(Manager):
+class JiraManager(Manager[JiraViewInterface]):
     """Manager for processing Jira webhook events.
 
     This class orchestrates the flow from webhook receipt to conversation creation,
@@ -257,7 +257,7 @@ class JiraManager(Manager):
 
         return jira_user, saas_user_auth
 
-    async def start_job(self, view: JiraViewInterface):
+    async def start_job(self, view: JiraViewInterface) -> None:
         """Start a Jira job/conversation."""
         # Import here to prevent circular import
         from server.conversation_callback_processor.jira_callback_processor import (

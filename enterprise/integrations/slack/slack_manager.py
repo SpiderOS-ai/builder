@@ -4,7 +4,11 @@ from typing import Any
 import jwt
 from integrations.manager import Manager
 from integrations.models import Message, SourceType
-from integrations.slack.slack_types import SlackViewInterface, StartingConvoException
+from integrations.slack.slack_types import (
+    SlackMessageView,
+    SlackViewInterface,
+    StartingConvoException,
+)
 from integrations.slack.slack_view import (
     SlackFactory,
     SlackNewConversationFromRepoFormView,
@@ -45,7 +49,7 @@ authorize_url_generator = AuthorizeUrlGenerator(
 )
 
 
-class SlackManager(Manager):
+class SlackManager(Manager[SlackViewInterface]):
     def __init__(self, token_manager):
         self.token_manager = token_manager
         self.login_link = (
@@ -232,7 +236,7 @@ class SlackManager(Manager):
     async def send_message(
         self,
         message: str | dict[str, Any],
-        slack_view: SlackViewInterface,
+        slack_view: SlackMessageView,
         ephemeral: bool = False,
     ):
         """Send a message to Slack.
@@ -241,6 +245,8 @@ class SlackManager(Manager):
             message: The message content. Can be a string (for simple text) or
                      a dict with 'text' and 'blocks' keys (for structured messages).
             slack_view: The Slack view object containing channel/thread info.
+                        Can be either SlackMessageView (for unauthenticated users)
+                        or SlackViewInterface (for authenticated users).
             ephemeral: If True, send as an ephemeral message visible only to the user.
         """
         client = AsyncWebClient(token=slack_view.bot_access_token)
@@ -315,7 +321,7 @@ class SlackManager(Manager):
 
         return True
 
-    async def start_job(self, slack_view: SlackViewInterface):
+    async def start_job(self, slack_view: SlackViewInterface) -> None:
         # Importing here prevents circular import
         from server.conversation_callback_processor.slack_callback_processor import (
             SlackCallbackProcessor,
@@ -323,7 +329,7 @@ class SlackManager(Manager):
 
         try:
             msg_info = None
-            user_info: SlackUser = slack_view.slack_to_openhands_user
+            user_info = slack_view.slack_to_openhands_user
             try:
                 logger.info(
                     f'[Slack] Starting job for user {user_info.slack_display_name} (id={user_info.slack_user_id})',

@@ -39,7 +39,7 @@ from openhands.server.user_auth.user_auth import UserAuth
 from openhands.utils.http_session import httpx_verify_option
 
 
-class LinearManager(Manager):
+class LinearManager(Manager[LinearViewInterface]):
     def __init__(self, token_manager: TokenManager):
         self.token_manager = token_manager
         self.integration_store = LinearIntegrationStore.get_instance()
@@ -343,7 +343,7 @@ class LinearManager(Manager):
             logger.error(f'[Linear] Error in is_job_requested: {str(e)}')
             return False
 
-    async def start_job(self, linear_view: LinearViewInterface):
+    async def start_job(self, linear_view: LinearViewInterface) -> None:
         """Start a Linear job/conversation."""
         # Import here to prevent circular import
         from server.conversation_callback_processor.linear_callback_processor import (
