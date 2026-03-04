@@ -106,7 +106,7 @@ class OrgInvitationService:
             raise ValueError(f'Invalid role: {role_name}')
 
         # Step 5: Check if user is already a member (by email)
-        existing_user = await UserStore.get_user_by_email_async(email)
+        existing_user = await UserStore.get_user_by_email(email)
         if existing_user:
             existing_member = await OrgMemberStore.get_org_member(
                 org_id, existing_user.id
@@ -127,7 +127,7 @@ class OrgInvitationService:
         # Step 7: Send invitation email
         try:
             # Get inviter info for the email
-            inviter_user = UserStore.get_user_by_id(str(inviter_member.user_id))
+            inviter_user = await UserStore.get_user_by_id(str(inviter_member.user_id))
             inviter_name = 'A team member'
             if inviter_user and inviter_user.email:
                 inviter_name = inviter_user.email.split('@')[0]
@@ -308,7 +308,7 @@ class OrgInvitationService:
             raise InvitationExpiredError('Invitation has expired')
 
         # Step 2.5: Verify user email matches invitation email
-        user = await UserStore.get_user_by_id_async(str(user_id))
+        user = await UserStore.get_user_by_id(str(user_id))
         if not user:
             raise InvitationInvalidError('User not found')
 
@@ -373,11 +373,16 @@ class OrgInvitationService:
         org_member_kwargs.pop('llm_model', None)
         org_member_kwargs.pop('llm_base_url', None)
 
+        # Get the llm_api_key as string (it's SecretStr | None in Settings)
+        llm_api_key = (
+            settings.llm_api_key.get_secret_value() if settings.llm_api_key else ''
+        )
+
         await OrgMemberStore.add_user_to_org(
             org_id=invitation.org_id,
             user_id=user_id,
             role_id=invitation.role_id,
-            llm_api_key=settings.llm_api_key,
+            llm_api_key=llm_api_key,
             status='active',
         )
 
@@ -387,6 +392,9 @@ class OrgInvitationService:
             OrgInvitation.STATUS_ACCEPTED,
             accepted_by_user_id=user_id,
         )
+
+        if not updated_invitation:
+            raise InvitationInvalidError('Failed to update invitation status')
 
         logger.info(
             'Organization invitation accepted',
