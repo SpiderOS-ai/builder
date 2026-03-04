@@ -2,10 +2,11 @@
 
 This module tests the environment variable override functionality that allows
 users to inject custom environment variables into sandbox environments via
-OH_AGENT_SERVER_ENV_* environment variables.
+OH_AGENT_SERVER_ENV environment variable and auto-forwarding of LLM_* variables.
 
 The functionality includes:
-- Parsing OH_AGENT_SERVER_ENV_* environment variables
+- Auto-forwarding of LLM_* environment variables to agent-server containers
+- Explicit overrides via OH_AGENT_SERVER_ENV JSON
 - Merging them into sandbox specifications
 - Integration across different sandbox types (Docker, Process, Remote)
 """
@@ -25,6 +26,7 @@ from openhands.app_server.sandbox.remote_sandbox_spec_service import (
     get_default_sandbox_specs as get_default_remote_sandbox_specs,
 )
 from openhands.app_server.sandbox.sandbox_spec_service import (
+    AUTO_FORWARD_PREFIXES,
     get_agent_server_env,
 )
 
@@ -183,6 +185,114 @@ class TestGetAgentServerEnv:
                 'CUSTOM_VAR': 'value',
             }
             assert result == expected
+
+
+class TestLLMAutoForwarding:
+    """Test cases for automatic forwarding of LLM_* environment variables."""
+
+    def test_auto_forward_prefixes_contains_llm(self):
+        """Test that LLM_ is in the auto-forward prefixes."""
+        assert 'LLM_' in AUTO_FORWARD_PREFIXES
+
+    def test_llm_timeout_auto_forwarded(self):
+        """Test that LLM_TIMEOUT is automatically forwarded."""
+        env_vars = {
+            'LLM_TIMEOUT': '3600',
+            'OTHER_VAR': 'should_not_be_included',
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert 'LLM_TIMEOUT' in result
+            assert result['LLM_TIMEOUT'] == '3600'
+            assert 'OTHER_VAR' not in result
+
+    def test_llm_num_retries_auto_forwarded(self):
+        """Test that LLM_NUM_RETRIES is automatically forwarded."""
+        env_vars = {
+            'LLM_NUM_RETRIES': '10',
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert 'LLM_NUM_RETRIES' in result
+            assert result['LLM_NUM_RETRIES'] == '10'
+
+    def test_multiple_llm_vars_auto_forwarded(self):
+        """Test that multiple LLM_* variables are automatically forwarded."""
+        env_vars = {
+            'LLM_TIMEOUT': '3600',
+            'LLM_NUM_RETRIES': '10',
+            'LLM_MODEL': 'gpt-4',
+            'LLM_BASE_URL': 'https://api.example.com',
+            'LLM_API_KEY': 'secret-key',
+            'NON_LLM_VAR': 'should_not_be_included',
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert result['LLM_TIMEOUT'] == '3600'
+            assert result['LLM_NUM_RETRIES'] == '10'
+            assert result['LLM_MODEL'] == 'gpt-4'
+            assert result['LLM_BASE_URL'] == 'https://api.example.com'
+            assert result['LLM_API_KEY'] == 'secret-key'
+            assert 'NON_LLM_VAR' not in result
+
+    def test_explicit_override_takes_precedence(self):
+        """Test that OH_AGENT_SERVER_ENV overrides auto-forwarded variables."""
+        env_vars = {
+            'LLM_TIMEOUT': '3600',  # Auto-forwarded value
+            'OH_AGENT_SERVER_ENV': '{"LLM_TIMEOUT": "7200"}',  # Explicit override
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            # Explicit override should win
+            assert result['LLM_TIMEOUT'] == '7200'
+
+    def test_combined_auto_forward_and_explicit(self):
+        """Test combining auto-forwarded and explicit variables."""
+        env_vars = {
+            'LLM_TIMEOUT': '3600',  # Auto-forwarded
+            'LLM_NUM_RETRIES': '10',  # Auto-forwarded
+            'OH_AGENT_SERVER_ENV': '{"DEBUG": "true", "CUSTOM_VAR": "value"}',  # Explicit
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            # Auto-forwarded
+            assert result['LLM_TIMEOUT'] == '3600'
+            assert result['LLM_NUM_RETRIES'] == '10'
+            # Explicit
+            assert result['DEBUG'] == 'true'
+            assert result['CUSTOM_VAR'] == 'value'
+
+    def test_no_llm_vars_returns_empty_without_explicit(self):
+        """Test that no LLM_* vars and no explicit env returns empty dict."""
+        env_vars = {
+            'SOME_OTHER_VAR': 'value',
+            'ANOTHER_VAR': 'another_value',
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert result == {}
+
+    def test_llm_prefix_is_case_sensitive(self):
+        """Test that LLM_ prefix matching is case-sensitive."""
+        env_vars = {
+            'LLM_TIMEOUT': '3600',  # Should be included
+            'llm_timeout': 'lowercase',  # Should NOT be included (wrong case)
+            'Llm_Timeout': 'mixed',  # Should NOT be included (wrong case)
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert 'LLM_TIMEOUT' in result
+            assert result['LLM_TIMEOUT'] == '3600'
+            # Lowercase variants should not be included
+            assert 'llm_timeout' not in result
+            assert 'Llm_Timeout' not in result
 
 
 class TestDockerSandboxSpecEnvironmentOverride:

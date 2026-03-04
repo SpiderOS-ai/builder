@@ -43,6 +43,26 @@ _logger = logging.getLogger(__name__)
 STARTUP_GRACE_SECONDS = 15
 
 
+def _get_use_host_network_default() -> bool:
+    """Get the default value for use_host_network from environment variables.
+
+    This function is called at runtime (not at class definition time) to ensure
+    that environment variable changes are picked up correctly.
+
+    Supports both the new AGENT_SERVER_USE_HOST_NETWORK and legacy
+    SANDBOX_USE_HOST_NETWORK environment variables for backward compatibility.
+    The new variable name takes precedence if both are set.
+    """
+    # Check new naming convention first
+    value = os.getenv('AGENT_SERVER_USE_HOST_NETWORK', '')
+
+    # Fall back to legacy naming for backward compatibility
+    if not value:
+        value = os.getenv('SANDBOX_USE_HOST_NETWORK', '')
+
+    return value.lower() in ('true', '1', 'yes')
+
+
 class VolumeMount(BaseModel):
     """Mounted volume within the container."""
 
@@ -585,18 +605,14 @@ class DockerSandboxServiceInjector(SandboxServiceInjector):
         ),
     )
     use_host_network: bool = Field(
-        default=os.getenv('SANDBOX_USE_HOST_NETWORK', '').lower()
-        in (
-            'true',
-            '1',
-            'yes',
-        ),
+        default_factory=_get_use_host_network_default,
         description=(
-            'Whether to use host networking mode for sandbox containers. '
+            'Whether to use host networking mode for agent-server containers. '
             'When enabled, containers share the host network namespace, '
             'making all container ports directly accessible on the host. '
             'This is useful for reverse proxy setups where dynamic port mapping '
-            'is problematic. Configure via OH_SANDBOX_USE_HOST_NETWORK environment variable.'
+            'is problematic. Configure via AGENT_SERVER_USE_HOST_NETWORK or '
+            'SANDBOX_USE_HOST_NETWORK (legacy) environment variable.'
         ),
     )
 
