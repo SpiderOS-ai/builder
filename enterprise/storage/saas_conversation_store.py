@@ -231,11 +231,10 @@ class SaasConversationStore(ConversationStore):
 
     @classmethod
     async def get_instance(
-        cls, config: OpenHandsConfig, user_id: str | None
+        cls,
+        config: OpenHandsConfig,
+        user_id: str,  # type: ignore[override]
     ) -> ConversationStore:
-        # user_id should not be None in SaaS
-        if not user_id:
-            raise ValueError('user_id is required for SaasConversationStore')
         # Use async version since callers now use asyncio.run_coroutine_threadsafe()
         # to dispatch to the main event loop where asyncpg connections work properly.
         user = await UserStore.get_user_by_id(user_id)
