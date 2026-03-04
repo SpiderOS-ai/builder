@@ -63,13 +63,18 @@ def patch_openhands():
     secrets_store.FileSecretsStore.get_instance = patched_secrets_get_instance
     print("[Spider-Builder] Patched SecretsStore")
     
-    # 4. Wrap app with OIDC middleware
+    # 4. Register /api/user/info route (before middleware wrapping)
     import openhands.server.listen as listen_module
+    from oidc_auth.user_router import router as user_router
+    listen_module.app.include_router(user_router)
+    print("[Spider-Builder] Registered /api/user/info endpoint")
+
+    # 5. Wrap app with OIDC middleware
     from oidc_auth.kgateway_middleware import KgatewayOIDCMiddleware
-    
+
     listen_module.app = KgatewayOIDCMiddleware(listen_module.app)
     print("[Spider-Builder] Wrapped app with OIDC middleware")
-    
+
     print("[Spider-Builder] All patches applied!")
 
 
